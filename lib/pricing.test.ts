@@ -1,98 +1,118 @@
 import { describe, expect, it } from "vitest";
 import {
+  FAMILY_POOLS,
   PLANS,
-  TIERS,
+  discountApplies,
+  discountedPlanPrice,
+  familyAverage,
+  familyTotal,
+  getFamilyPool,
   getPlan,
   lineTotal,
-  planHasDiscounts,
-  planPrice,
   quoteTotals,
   type Line,
 } from "./pricing";
 
-describe("plan pricing", () => {
-  it("matches the printed sheet for every plan and tier", () => {
-    const expected: Record<string, [number, number | null, number | null]> = {
-      "1gb": [249, 199, 162],
-      "5gb": [299, 239, 194],
-      "10gb": [349, 279, 227],
-      "18gb": [399, 319, 259],
-      "30gb": [449, 359, 292],
-      ub_normal: [529, 423, 344],
-      ub_maks: [629, 503, 409],
-      "1gb_u13": [99, null, null],
+describe("base plan prices (match official tool)", () => {
+  it("has the seven official Enkelt plans at the right prices", () => {
+    const expected: Record<string, number> = {
+      "1gb": 249,
+      "5gb": 299,
+      "10gb": 349,
+      "18gb": 399,
+      "30gb": 449,
+      ub: 529,
+      ub_maks: 629,
     };
+    expect(PLANS.length).toBe(7);
     for (const plan of PLANS) {
-      const [plat, t20, t35] = expected[plan.id];
-      expect(plan.prices.platinum).toBe(plat);
-      expect(plan.prices.u30_20).toBe(t20);
-      expect(plan.prices.u30_35).toBe(t35);
+      expect(plan.price).toBe(expected[plan.id]);
     }
-  });
-
-  it("discount tiers are 20% and 35% off platinum (rounded to whole kr)", () => {
-    for (const plan of PLANS) {
-      if (!planHasDiscounts(plan)) continue;
-      const plat = plan.prices.platinum!;
-      expect(plan.prices.u30_20).toBe(Math.round(plat * 0.8));
-      expect(plan.prices.u30_35).toBe(Math.round(plat * 0.65));
-    }
-  });
-
-  it("U13 plan has no discount tiers and falls back to platinum", () => {
-    const u13 = getPlan("1gb_u13");
-    expect(planHasDiscounts(u13)).toBe(false);
-    expect(planPrice(u13, "u30_20")).toBe(99);
-    expect(planPrice(u13, "u30_35")).toBe(99);
   });
 });
 
-describe("lineTotal", () => {
-  it("adds plan price at the chosen tier", () => {
-    expect(lineTotal({ id: "a", planId: "18gb", tier: "u30_20", addonIds: [] })).toBe(319);
+describe("discountedPlanPrice (official multipliers, rounded)", () => {
+  const p1gb = getPlan("1gb"); // 249
+
+  it("U30 20% and 35% reproduce the printed sheet rows", () => {
+    expect(discountedPlanPrice(p1gb, ["u30"])).toBe(199); // 249 * .8 = 199.2 -> 199
+    expect(discountedPlanPrice(p1gb, ["u3035"])).toBe(162); // 249 * .65 = 161.85 -> 162
   });
 
-  it("adds selected add-ons on top", () => {
-    // 18 GB @ −35% (259) + Tvillingsim (79) + Digital trygghet (69) = 407
+  it("U30 30% is 0.7 of base", () => {
+    expect(discountedPlanPrice(p1gb, ["u3030"])).toBe(Math.round(249 * 0.7)); // 174
+  });
+
+  it("samlerabatt stacks on top of U30 in order", () => {
+    // samle (.9) then u30 (.8): 249 * .9 * .8 = 179.28 -> 179
+    expect(discountedPlanPrice(p1gb, ["samle", "u30"])).toBe(179);
+  });
+
+  it("applies discounts in the official order regardless of selection order", () => {
+    expect(discountedPlanPrice(p1gb, ["u30", "samle"])).toBe(
+      discountedPlanPrice(p1gb, ["samle", "u30"]),
+    );
+  });
+
+  it("samlerabatt 20% does not apply to Ubegrenset Maksimal", () => {
+    const maks = getPlan("ub_maks"); // 629, gb -1
+    expect(discountApplies("samle20", maks)).toBe(false);
+    expect(discountedPlanPrice(maks, ["samle20"])).toBe(629);
+    // but it does apply to a normal plan
+    const ub = getPlan("ub"); // 529
+    expect(discountApplies("samle20", ub)).toBe(true);
+    expect(discountedPlanPrice(ub, ["samle20"])).toBe(Math.round(529 * 0.8)); // 423
+  });
+});
+
+describe("lineTotal and quoteTotals", () => {
+  it("adds non-discounted add-ons on top of the discounted plan", () => {
     const line: Line = {
       id: "a",
-      planId: "18gb",
-      tier: "u30_35",
-      addonIds: ["tvillingsim", "digital_trygghet"],
+      planId: "18gb", // 399
+      discounts: ["u30"], // -> 319
+      addonIds: ["tvillingsim"], // +79
     };
-    expect(lineTotal(line)).toBe(259 + 79 + 69);
-  });
-});
-
-describe("quoteTotals", () => {
-  const lines: Line[] = [
-    { id: "1", planId: "ub_maks", tier: "u30_20", addonIds: [] }, // 503
-    { id: "2", planId: "5gb", tier: "u30_35", addonIds: ["tvillingsim"] }, // 194 + 79 = 273
-    { id: "3", planId: "1gb_u13", tier: "platinum", addonIds: [] }, // 99
-  ];
-
-  it("sums monthly and yearly", () => {
-    const t = quoteTotals(lines);
-    expect(t.monthly).toBe(503 + 273 + 99); // 875
-    expect(t.yearly).toBe(875 * 12);
+    expect(lineTotal(line)).toBe(319 + 79);
   });
 
-  it("computes savings vs platinum (add-ons cancel out)", () => {
+  it("computes monthly, yearly, savings and average", () => {
+    const lines: Line[] = [
+      { id: "1", planId: "ub_maks", discounts: ["u30"], addonIds: [] }, // 629 -> 503
+      { id: "2", planId: "5gb", discounts: ["u3035"], addonIds: ["tvillingsim"] }, // 194 + 79 = 273
+    ];
     const t = quoteTotals(lines);
-    // platinum: 629 + (299 + 79) + 99 = 1106
-    expect(t.platinumMonthly).toBe(629 + 299 + 79 + 99);
-    expect(t.savingsMonthly).toBe(t.platinumMonthly - t.monthly);
+    expect(t.monthly).toBe(503 + 273); // 776
+    expect(t.yearly).toBe(776 * 12);
+    expect(t.baseMonthly).toBe(629 + 299 + 79); // 1007
+    expect(t.savingsMonthly).toBe(t.baseMonthly - t.monthly);
     expect(t.savingsYearly).toBe(t.savingsMonthly * 12);
+    expect(t.averageMonthly).toBe(Math.round(776 / 2));
   });
 
-  it("has zero savings for an all-platinum quote", () => {
-    const t = quoteTotals([{ id: "1", planId: "30gb", tier: "platinum", addonIds: ["datasim"] }]);
+  it("has zero savings with no discounts", () => {
+    const t = quoteTotals([{ id: "1", planId: "30gb", discounts: [], addonIds: ["datasim"] }]);
     expect(t.savingsMonthly).toBe(0);
   });
 });
 
-describe("metadata", () => {
-  it("exposes three tiers", () => {
-    expect(TIERS.map((t) => t.id)).toEqual(["platinum", "u30_20", "u30_35"]);
+describe("Familie", () => {
+  it("has the six official pools", () => {
+    expect(FAMILY_POOLS.map((p) => p.basis)).toEqual([9, 109, 229, 379, 479, 629]);
+  });
+
+  it("total = members * 210 + basis", () => {
+    const pool = getFamilyPool("f20"); // basis 229
+    expect(familyTotal(3, pool, false)).toBe(3 * 210 + 229); // 859
+  });
+
+  it("applies 10% samlerabatt to the family total", () => {
+    const pool = getFamilyPool("f20");
+    expect(familyTotal(3, pool, true)).toBe(Math.round((3 * 210 + 229) * 0.9)); // 773
+  });
+
+  it("average is total divided by members", () => {
+    const pool = getFamilyPool("f20");
+    expect(familyAverage(3, pool, false)).toBe(Math.round(859 / 3));
   });
 });

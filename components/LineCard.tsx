@@ -2,15 +2,15 @@
 
 import {
   ADDONS,
+  DISCOUNTS,
   PLANS,
-  TIERS,
+  type DiscountId,
   type Line,
-  type Tier,
+  discountApplies,
+  discountedPlanPrice,
   formatKr,
   getPlan,
   lineTotal,
-  planHasDiscounts,
-  planPrice,
 } from "@/lib/pricing";
 
 interface LineCardProps {
@@ -23,12 +23,13 @@ interface LineCardProps {
 
 export default function LineCard({ line, index, canRemove, onChange, onRemove }: LineCardProps) {
   const plan = getPlan(line.planId);
-  const hasDiscounts = planHasDiscounts(plan);
 
-  function selectPlan(planId: string) {
-    const next = getPlan(planId);
-    const tier: Tier = planHasDiscounts(next) ? line.tier : "platinum";
-    onChange({ ...line, planId, tier });
+  function toggleDiscount(id: DiscountId) {
+    const has = line.discounts.includes(id);
+    onChange({
+      ...line,
+      discounts: has ? line.discounts.filter((d) => d !== id) : [...line.discounts, id],
+    });
   }
 
   function toggleAddon(addonId: string) {
@@ -40,6 +41,10 @@ export default function LineCard({ line, index, canRemove, onChange, onRemove }:
         : [...line.addonIds, addonId],
     });
   }
+
+  const base = plan.price;
+  const discounted = discountedPlanPrice(plan, line.discounts);
+  const hasDiscount = discounted < base;
 
   return (
     <section className="rounded-[16px] bg-card border border-line">
@@ -73,7 +78,7 @@ export default function LineCard({ line, index, canRemove, onChange, onRemove }:
                 <button
                   key={p.id}
                   type="button"
-                  onClick={() => selectPlan(p.id)}
+                  onClick={() => onChange({ ...line, planId: p.id })}
                   className={`flex flex-col items-start rounded-[11px] border px-3.5 py-2.5 text-left transition ${
                     selected
                       ? "border-ink bg-paper-2"
@@ -84,39 +89,53 @@ export default function LineCard({ line, index, canRemove, onChange, onRemove }:
                     {p.name}
                     {p.bonus && <span className="text-ink-soft font-normal"> {p.bonus}</span>}
                   </span>
-                  <span className="text-[12px] text-muted">
-                    {p.note ?? `fra ${formatKr(planPrice(p, "u30_35"))}`}
-                  </span>
+                  <span className="text-[12px] text-muted tnum">{formatKr(p.price)}</span>
                 </button>
               );
             })}
           </div>
         </div>
 
-        {/* Discount tier */}
+        {/* Discounts (stackable, exactly as the official cart) */}
         <div>
-          <p className="eyebrow mb-3">Kundetype</p>
-          <div className="grid grid-cols-3 gap-2">
-            {TIERS.map((t) => {
-              const available = t.id === "platinum" || hasDiscounts;
-              const selected = t.id === line.tier;
+          <p className="eyebrow mb-3">Rabatter</p>
+          <div className="flex flex-col gap-2">
+            {DISCOUNTS.map((d) => {
+              const applies = discountApplies(d.id, plan);
+              const selected = applies && line.discounts.includes(d.id);
               return (
                 <button
-                  key={t.id}
+                  key={d.id}
                   type="button"
-                  disabled={!available}
-                  onClick={() => onChange({ ...line, tier: t.id })}
-                  className={`rounded-[11px] border px-2 py-2.5 text-center transition ${
+                  disabled={!applies}
+                  onClick={() => toggleDiscount(d.id)}
+                  className={`flex items-center gap-3 rounded-[11px] border px-3.5 py-2.5 text-left transition ${
                     selected
-                      ? "border-ink bg-ink text-paper"
-                      : available
-                        ? "border-line bg-card text-ink hover:border-ink-soft/40"
-                        : "border-line/60 bg-paper-2/50 text-muted cursor-not-allowed"
+                      ? "border-ink bg-paper-2"
+                      : applies
+                        ? "border-line bg-card hover:border-ink-soft/40"
+                        : "border-line/60 bg-paper-2/40 cursor-not-allowed"
                   }`}
                 >
-                  <span className="block text-[11px] leading-tight opacity-75">{t.label}</span>
-                  <span className="block font-display font-medium tnum mt-0.5">
-                    {available ? formatKr(planPrice(plan, t.id)) : "n/a"}
+                  <span
+                    className={`grid place-items-center w-5 h-5 rounded-[6px] border text-[12px] leading-none ${
+                      selected
+                        ? "border-accent bg-accent text-accent-ink"
+                        : "border-line bg-card text-transparent"
+                    }`}
+                    aria-hidden="true"
+                  >
+                    ✓
+                  </span>
+                  <span className="flex-1">
+                    <span
+                      className={`text-[14px] ${applies ? "text-ink" : "text-muted"} ${selected ? "font-medium" : ""}`}
+                    >
+                      {d.label}
+                    </span>
+                    {!applies && d.note && (
+                      <span className="block text-[11px] text-muted">{d.note}</span>
+                    )}
                   </span>
                 </button>
               );
@@ -152,8 +171,13 @@ export default function LineCard({ line, index, canRemove, onChange, onRemove }:
 
         <div className="flex items-baseline justify-between border-t border-line pt-4">
           <span className="text-[13px] text-ink-soft">Pris per måned</span>
-          <span className="font-display text-2xl font-medium text-ink tnum">
-            {formatKr(lineTotal(line))}
+          <span className="flex items-baseline gap-2">
+            {hasDiscount && (
+              <span className="text-[13px] text-muted line-through tnum">{formatKr(base)}</span>
+            )}
+            <span className="font-display text-2xl font-medium text-ink tnum">
+              {formatKr(lineTotal(line))}
+            </span>
           </span>
         </div>
       </div>

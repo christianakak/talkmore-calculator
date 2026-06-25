@@ -1,19 +1,45 @@
 // Single source of truth for the Talkmore field-sales calculator.
-// Prices decoded directly from the printed price sheet (kr/mnd).
-// Discount tiers are the exact printed values, not computed, to match the sheet.
+// Mirrors the official tool at https://talkmore.kundeportal.no/ (see docs/official-pricing.md).
+// Prices and discount math are decoded from the official production bundle.
 
-export type Tier = "platinum" | "u30_20" | "u30_35";
+export type DiscountId = "samle" | "u30" | "u3030" | "u3035" | "samle20";
+
+export interface Discount {
+  id: DiscountId;
+  label: string;
+  factor: number;
+  note?: string;
+}
+
+// Order matters: the official cart applies these multipliers in this exact sequence.
+export const DISCOUNTS: Discount[] = [
+  { id: "samle", label: "Samlerabatt 10%", factor: 0.9 },
+  { id: "u30", label: "U30 (20%)", factor: 0.8 },
+  { id: "u3030", label: "U30 (30%)", factor: 0.7 },
+  { id: "u3035", label: "U30 (35%)", factor: 0.65 },
+  { id: "samle20", label: "Samlerabatt 20%", factor: 0.8, note: "Ikke på Ubegrenset Maksimal" },
+];
 
 export interface Plan {
   id: string;
   name: string;
-  /** Bonus data shown on the sheet, e.g. "+2 GB". Empty when none. */
+  /** 0 = Ubegrenset, -1 = Ubegrenset Maksimal, otherwise the GB amount. */
+  gb: number;
+  /** Bonus data from the price sheet (informational, does not affect price). */
   bonus: string;
-  /** Price per tier in kr/mnd. u30_20 / u30_35 are null when the plan has no discount tiers. */
-  prices: Record<Tier, number | null>;
-  /** Short note, e.g. for the child plan. */
-  note?: string;
+  /** Base monthly price in kr before discounts. */
+  price: number;
 }
+
+export const PLANS: Plan[] = [
+  { id: "1gb", name: "1 GB", gb: 1, bonus: "+2 GB", price: 249 },
+  { id: "5gb", name: "5 GB", gb: 5, bonus: "+3 GB", price: 299 },
+  { id: "10gb", name: "10 GB", gb: 10, bonus: "+4 GB", price: 349 },
+  { id: "18gb", name: "18 GB", gb: 18, bonus: "+5 GB", price: 399 },
+  { id: "30gb", name: "30 GB", gb: 30, bonus: "+10 GB", price: 449 },
+  { id: "ub", name: "Ubegrenset", gb: 0, bonus: "", price: 529 },
+  { id: "ub_maks", name: "Ubegrenset Maksimal", gb: -1, bonus: "", price: 629 },
+];
 
 export interface Addon {
   id: string;
@@ -21,29 +47,7 @@ export interface Addon {
   price: number;
 }
 
-export const TIERS: { id: Tier; label: string; short: string }[] = [
-  { id: "platinum", label: "Platinum pris", short: "Full pris" },
-  { id: "u30_20", label: "Under 30 · 20%", short: "20%" },
-  { id: "u30_35", label: "Under 30 · 35%", short: "35%" },
-];
-
-export const PLANS: Plan[] = [
-  { id: "1gb", name: "1 GB", bonus: "+2 GB", prices: { platinum: 249, u30_20: 199, u30_35: 162 } },
-  { id: "5gb", name: "5 GB", bonus: "+3 GB", prices: { platinum: 299, u30_20: 239, u30_35: 194 } },
-  { id: "10gb", name: "10 GB", bonus: "+4 GB", prices: { platinum: 349, u30_20: 279, u30_35: 227 } },
-  { id: "18gb", name: "18 GB", bonus: "+5 GB", prices: { platinum: 399, u30_20: 319, u30_35: 259 } },
-  { id: "30gb", name: "30 GB", bonus: "+10 GB", prices: { platinum: 449, u30_20: 359, u30_35: 292 } },
-  { id: "ub_normal", name: "UB normal", bonus: "", prices: { platinum: 529, u30_20: 423, u30_35: 344 } },
-  { id: "ub_maks", name: "UB maksimal", bonus: "", prices: { platinum: 629, u30_20: 503, u30_35: 409 } },
-  {
-    id: "1gb_u13",
-    name: "1 GB",
-    bonus: "",
-    prices: { platinum: 99, u30_20: null, u30_35: null },
-    note: "U13 · barneabonnement",
-  },
-];
-
+// From the printed price sheet. Add-ons are not discounted.
 export const ADDONS: Addon[] = [
   { id: "digital_trygghet", name: "Digital trygghet", price: 69 },
   { id: "tvillingsim", name: "Tvillingsim", price: 79 },
@@ -71,7 +75,7 @@ export const BENEFITS: string[] = [
 export interface Line {
   id: string;
   planId: string;
-  tier: Tier;
+  discounts: DiscountId[];
   addonIds: string[];
 }
 
@@ -81,14 +85,10 @@ export function getPlan(planId: string): Plan {
   return plan;
 }
 
-/** Whether a plan offers the under-30 discount tiers. */
-export function planHasDiscounts(plan: Plan): boolean {
-  return plan.prices.u30_20 !== null;
-}
-
-/** Plan price at the given tier, falling back to platinum when the tier is unavailable. */
-export function planPrice(plan: Plan, tier: Tier): number {
-  return plan.prices[tier] ?? plan.prices.platinum ?? 0;
+/** Whether a discount applies to a given plan (Samlerabatt 20% is excluded on Ubegrenset Maksimal). */
+export function discountApplies(discountId: DiscountId, plan: Plan): boolean {
+  if (discountId === "samle20" && plan.gb === -1) return false;
+  return true;
 }
 
 function addonsTotal(addonIds: string[]): number {
@@ -98,40 +98,90 @@ function addonsTotal(addonIds: string[]): number {
   }, 0);
 }
 
-/** Monthly total for a single line: plan price at chosen tier + selected add-ons. */
-export function lineTotal(line: Line): number {
-  const plan = getPlan(line.planId);
-  return planPrice(plan, line.tier) + addonsTotal(line.addonIds);
+/** Plan price after all selected discounts, applied in the official order, rounded to whole kr. */
+export function discountedPlanPrice(plan: Plan, discounts: DiscountId[]): number {
+  let price = plan.price;
+  for (const d of DISCOUNTS) {
+    if (!discounts.includes(d.id)) continue;
+    if (!discountApplies(d.id, plan)) continue;
+    price *= d.factor;
+  }
+  return Math.round(price);
 }
 
-/** Monthly total for the same line at the full Platinum price (add-ons unchanged). */
-export function linePlatinumTotal(line: Line): number {
-  const plan = getPlan(line.planId);
-  return planPrice(plan, "platinum") + addonsTotal(line.addonIds);
+/** Monthly total for a single line: discounted plan price + selected add-ons. */
+export function lineTotal(line: Line): number {
+  return discountedPlanPrice(getPlan(line.planId), line.discounts) + addonsTotal(line.addonIds);
+}
+
+/** Monthly total at full price (no discounts), add-ons unchanged. Used for savings. */
+export function lineBaseTotal(line: Line): number {
+  return getPlan(line.planId).price + addonsTotal(line.addonIds);
 }
 
 export interface QuoteTotals {
   monthly: number;
   yearly: number;
-  platinumMonthly: number;
+  baseMonthly: number;
   savingsMonthly: number;
   savingsYearly: number;
+  averageMonthly: number;
 }
 
 export function quoteTotals(lines: Line[]): QuoteTotals {
   const monthly = lines.reduce((sum, l) => sum + lineTotal(l), 0);
-  const platinumMonthly = lines.reduce((sum, l) => sum + linePlatinumTotal(l), 0);
-  const savingsMonthly = platinumMonthly - monthly;
+  const baseMonthly = lines.reduce((sum, l) => sum + lineBaseTotal(l), 0);
+  const savingsMonthly = baseMonthly - monthly;
   return {
     monthly,
     yearly: monthly * 12,
-    platinumMonthly,
+    baseMonthly,
     savingsMonthly,
     savingsYearly: savingsMonthly * 12,
+    averageMonthly: lines.length ? Math.round(monthly / lines.length) : 0,
   };
+}
+
+// ---- Familie (shared / family plan) ----
+
+export interface FamilyPool {
+  id: string;
+  name: string;
+  gb: number; // 0 = Ubegrenset
+  extraGb: number;
+  basis: number;
+}
+
+export const FAMILY_PER_MEMBER = 210;
+
+export const FAMILY_POOLS: FamilyPool[] = [
+  { id: "f5", name: "5 GB", gb: 5, extraGb: 2, basis: 9 },
+  { id: "f10", name: "10 GB", gb: 10, extraGb: 4, basis: 109 },
+  { id: "f20", name: "20 GB", gb: 20, extraGb: 4, basis: 229 },
+  { id: "f40", name: "40 GB", gb: 40, extraGb: 5, basis: 379 },
+  { id: "f80", name: "80 GB", gb: 80, extraGb: 10, basis: 479 },
+  { id: "fub", name: "Ubegrenset", gb: 0, extraGb: 0, basis: 629 },
+];
+
+export function getFamilyPool(poolId: string): FamilyPool {
+  const pool = FAMILY_POOLS.find((p) => p.id === poolId);
+  if (!pool) throw new Error(`Unknown family pool: ${poolId}`);
+  return pool;
+}
+
+/** Family monthly total: members × 210 + pool basis, optionally with 10% samlerabatt. */
+export function familyTotal(members: number, pool: FamilyPool, samlerabatt: boolean): number {
+  const base = members * FAMILY_PER_MEMBER + pool.basis;
+  return Math.round(samlerabatt ? base * 0.9 : base);
+}
+
+/** Average price per member (Snittpris). */
+export function familyAverage(members: number, pool: FamilyPool, samlerabatt: boolean): number {
+  if (members <= 0) return 0;
+  return Math.round(familyTotal(members, pool, samlerabatt) / members);
 }
 
 /** Norwegian price formatting, e.g. 1044 -> "1 044,-". */
 export function formatKr(value: number): string {
-  return `${value.toLocaleString("nb-NO")},-`;
+  return `${Math.round(value).toLocaleString("nb-NO")},-`;
 }

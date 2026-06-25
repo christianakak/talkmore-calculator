@@ -4,16 +4,20 @@ import { useState } from "react";
 import {
   ADDONS,
   BENEFITS,
-  TIERS,
+  DISCOUNTS,
   type Line,
+  discountApplies,
   formatKr,
   getPlan,
   lineTotal,
   quoteTotals,
 } from "@/lib/pricing";
 
-function tierLabel(tierId: string): string {
-  return TIERS.find((t) => t.id === tierId)?.label ?? "";
+function activeDiscountLabels(line: Line): string[] {
+  const plan = getPlan(line.planId);
+  return DISCOUNTS.filter(
+    (d) => line.discounts.includes(d.id) && discountApplies(d.id, plan),
+  ).map((d) => d.label);
 }
 
 function lineDescription(line: Line): string {
@@ -26,12 +30,17 @@ function lineDescription(line: Line): string {
   return parts.join(" · ");
 }
 
+function lineSubtitle(line: Line): string {
+  const discounts = activeDiscountLabels(line);
+  return discounts.length ? discounts.join(" · ") : "Ingen rabatt";
+}
+
 function buildShareText(lines: Line[]): string {
   const totals = quoteTotals(lines);
-  const rows = lines.map(
-    (l, i) =>
-      `${i + 1}. ${lineDescription(l)} (${tierLabel(l.tier)}): ${formatKr(lineTotal(l))}/mnd`,
-  );
+  const rows = lines.map((l, i) => {
+    const sub = lineSubtitle(l);
+    return `${i + 1}. ${lineDescription(l)} (${sub}): ${formatKr(lineTotal(l))}/mnd`;
+  });
   const out = ["Talkmore · tilbud", "", ...rows, "", `Total: ${formatKr(totals.monthly)}/mnd`];
   if (totals.savingsMonthly > 0) {
     out.push(
@@ -93,7 +102,7 @@ export default function QuoteSummary({ lines, onClose }: QuoteSummaryProps) {
               >
                 <div>
                   <p className="font-medium text-ink">{lineDescription(line)}</p>
-                  <p className="text-[12px] text-muted">{tierLabel(line.tier)}</p>
+                  <p className="text-[12px] text-muted">{lineSubtitle(line)}</p>
                 </div>
                 <span className="font-display font-medium text-ink tnum whitespace-nowrap">
                   {formatKr(lineTotal(line))}
@@ -112,12 +121,16 @@ export default function QuoteSummary({ lines, onClose }: QuoteSummaryProps) {
                 {formatKr(totals.monthly)}
               </span>
             </div>
+            <div className="mt-3 flex items-center justify-between text-[12px]">
+              <span className="text-paper/50">Snittpris per abonnement</span>
+              <span className="text-paper/70 tnum">{formatKr(totals.averageMonthly)}</span>
+            </div>
             {totals.savingsMonthly > 0 && (
               <div className="mt-5 pt-5 border-t border-white/12 flex items-end justify-between">
                 <div>
                   <p className="text-paper/70 text-[13px]">Besparelse mot full pris</p>
                   <p className="text-paper/50 text-[12px] tnum">
-                    {formatKr(totals.platinumMonthly)}/mnd uten rabatt
+                    {formatKr(totals.baseMonthly)}/mnd uten rabatt
                   </p>
                 </div>
                 <div className="text-right">
