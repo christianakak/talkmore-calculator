@@ -2,6 +2,11 @@
 // Mirrors the official tool at https://talkmore.kundeportal.no/ (see docs/official-pricing.md).
 // Prices and discount math are decoded from the official production bundle.
 
+// When the prices below were last checked against the official calculator.
+// Bump this whenever you re-verify lib/pricing.ts against talkmore.kundeportal.no.
+export const PRICES_VERIFIED = "25.06.2026";
+export const PRICES_SOURCE = "talkmore.kundeportal.no";
+
 export type DiscountId = "samle" | "u30" | "u3030" | "u3035" | "samle20";
 
 export interface Discount {

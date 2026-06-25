@@ -7,6 +7,8 @@ import QuoteSummary from "@/components/QuoteSummary";
 import {
   FAMILY_POOLS,
   PLANS,
+  PRICES_SOURCE,
+  PRICES_VERIFIED,
   type FamilyConfig,
   type Line,
   combinedTotals,
@@ -202,6 +204,11 @@ export default function Page() {
               </button>
             </div>
           </div>
+
+          {/* Freshness signal */}
+          <p className="text-center text-[12px] text-muted mt-8">
+            Priser verifisert {PRICES_VERIFIED} mot {PRICES_SOURCE}
+          </p>
         </div>
       </main>
 
