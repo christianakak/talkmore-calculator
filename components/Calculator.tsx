@@ -16,7 +16,6 @@ import {
 } from "@/lib/pricing";
 
 const STORAGE_KEY = "tm-enkelt-v1";
-const U30_IDS: DiscountId[] = ["u30", "u3030", "u3035"];
 
 const DISCOUNT_SUFFIX: Record<DiscountId, string> = {
   samle: " −10%",
@@ -45,7 +44,6 @@ interface EnkeltState {
   planId: string;
   extra: boolean;
   portDate: string;
-  u30: boolean;
   discounts: DiscountId[];
   firstMonthFree: boolean;
   addonIds: string[];
@@ -55,7 +53,6 @@ const initialState: EnkeltState = {
   planId: "10gb",
   extra: false,
   portDate: "",
-  u30: false,
   discounts: [],
   firstMonthFree: false,
   addonIds: [],
@@ -111,15 +108,8 @@ export default function Calculator() {
       planId: id,
       extra: false,
       discounts: p.flat ? [] : valid,
-      u30: p.flat ? false : st.u30,
       firstMonthFree: p.gb === 0 || p.gb === -1 ? false : st.firstMonthFree,
     });
-  }
-
-  function toggleU30() {
-    const next = !st.u30;
-    const clear = !next && st.discounts.some((d) => U30_IDS.includes(d));
-    patch({ u30: next, discounts: clear ? [] : st.discounts });
   }
 
   function pickDiscount(id: DiscountId | "full") {
@@ -158,17 +148,15 @@ export default function Calculator() {
       })
     : null;
 
-  const baseChips: { id: DiscountId | "full"; label: string }[] = [
-    { id: "full", label: "Full pris" },
-    { id: "samle", label: "10% rabatt" },
-    { id: "samle20", label: "20% rabatt" },
-  ];
-  const u30Chips: { id: DiscountId; label: string }[] = [
+  // One flat radio row, matching the official tool's RABATT order.
+  const chips: { id: DiscountId | "full"; label: string }[] = [
+    { id: "full", label: "Ingen rabatt" },
     { id: "u30", label: "U30 20%" },
     { id: "u3030", label: "U30 30%" },
     { id: "u3035", label: "U30 35%" },
+    { id: "samle", label: "10% rabatt" },
+    { id: "samle20", label: "20% rabatt" },
   ];
-  const chips = st.u30 ? [...baseChips, ...u30Chips] : baseChips;
 
   return (
     <div>
@@ -232,13 +220,7 @@ export default function Calculator() {
       {!plan.flat && (
         <>
           <label className={labelCls}>Rabatt</label>
-          <Toggle
-            label="Kunde under 30 år"
-            hint="låser opp U30-rabatt"
-            checked={st.u30}
-            onChange={toggleU30}
-          />
-          <div className="mt-2 grid grid-cols-3 gap-2">
+          <div className="grid grid-cols-3 gap-2">
             {chips.map((c) => {
               const price = c.id === "full" ? plan.price : discountedPlanPrice(plan, [c.id]);
               const sel = c.id === "full" ? st.discounts.length === 0 : st.discounts.includes(c.id);
