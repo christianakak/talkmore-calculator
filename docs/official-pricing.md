@@ -53,8 +53,11 @@ Notes:
 
 ```
 total = (members * 210) + basis        // members >= 2
-total = total * 0.9                     // if samlerabatt (enable10)
+total = total * 0.8                     // if samlerabatt
 ```
+
+> Note: the decoded production bundle applied `* 0.9` (10%) for the family samlerabatt,
+> but field/sales use confirms it is **20% (`* 0.8`)**. `lib/pricing.ts` follows the 20% rate.
 
 | Shared pool | Extra GB | basis |
 |------|------:|------:|
@@ -65,7 +68,7 @@ total = total * 0.9                     // if samlerabatt (enable10)
 | 80 GB | +10 | 479 |
 | Ubegrenset | – | 629 |
 
-Example: family of 3 on the 20 GB pool = 3*210 + 229 = 859 kr/mnd (773 with samlerabatt).
+Example: family of 3 on the 20 GB pool = 3*210 + 229 = 859 kr/mnd (687 with 20% samlerabatt).
 
 ## UI labels seen in the official tool
 Enkelt · Familie · Enkeltabonnement · Ubegrenset · Ubegrenset Maksimal · Ekstra GB ·

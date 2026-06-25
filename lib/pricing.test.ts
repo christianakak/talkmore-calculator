@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import {
+  ADDONS,
   FAMILY_POOLS,
+  PLANS,
   combinedTotals,
   discountApplies,
   discountedPlanPrice,
@@ -10,7 +12,9 @@ import {
   formatKr,
   getFamilyPool,
   getPlan,
+  invoiceSchedule,
   lineTotal,
+  monthNameNb,
   quoteTotals,
   toggleDiscount,
   type DiscountId,
@@ -125,8 +129,8 @@ describe("Familie", () => {
     expect(familyTotal(3, getFamilyPool("f20"), false)).toBe(3 * 210 + 229); // 859
   });
 
-  it("applies 10% samlerabatt (precise)", () => {
-    expect(familyTotal(3, getFamilyPool("f20"), true)).toBeCloseTo(859 * 0.9, 5); // 773.1
+  it("applies 20% samlerabatt (precise)", () => {
+    expect(familyTotal(3, getFamilyPool("f20"), true)).toBeCloseTo(859 * 0.8, 5); // 687.2
   });
 
   it("average is total / members", () => {
@@ -140,13 +144,13 @@ describe("combinedTotals (Enkelt + Familie in one quote)", () => {
     { id: "2", planId: "1gb_u13", discounts: [], addonIds: [] }, // 99 flat
   ];
   const families: FamilyConfig[] = [
-    { id: "f", members: 3, poolId: "f20", samlerabatt: true }, // 773.1
+    { id: "f", members: 3, poolId: "f20", samlerabatt: true }, // 687.2
   ];
 
   it("sums lines and families precisely", () => {
     const t = combinedTotals(lines, families);
     expect(t.monthly).toBeCloseTo(629 * 0.8 + 99 + familyConfigTotal(families[0]), 5);
-    expect(formatKr(t.monthly)).toBe(formatKr(503.2 + 99 + 773.1));
+    expect(formatKr(t.monthly)).toBe(formatKr(503.2 + 99 + 687.2));
   });
 
   it("counts units as one per line plus each family's members", () => {
@@ -165,5 +169,98 @@ describe("combinedTotals (Enkelt + Familie in one quote)", () => {
     const t = combinedTotals([], []);
     expect(t.monthly).toBe(0);
     expect(t.averageMonthly).toBe(0);
+  });
+});
+
+describe("invoiceSchedule — first-invoice timing (30-day convention)", () => {
+  it("mid-month port pays rest days on top of the first month", () => {
+    // 349 plan, ported 20th: restDays = 30 - 20 = 10, restAmount = round(349/30*10) = 116
+    const s = invoiceSchedule({ planMonthly: 349, addonsMonthly: 0, portDate: "2026-06-20", firstMonthFree: false });
+    expect(s.restDays).toBe(10);
+    expect(s.restAmount).toBe(116);
+    expect(s.bars).toEqual([116 + 349, 349, 349]);
+  });
+
+  it("rest days are computed on the plan only — add-ons are free the first month", () => {
+    // restAmount must ignore the 79 add-on; recurring monthly includes it.
+    const s = invoiceSchedule({ planMonthly: 349, addonsMonthly: 79, portDate: "2026-06-20", firstMonthFree: false });
+    expect(s.restAmount).toBe(116); // round(349/30*10), not (349+79)/30*10
+    expect(s.monthly).toBe(428);
+    expect(s.bars).toEqual([116 + 428, 428, 428]);
+  });
+
+  it("first month free zeroes the rest-days charge", () => {
+    const s = invoiceSchedule({ planMonthly: 349, addonsMonthly: 0, portDate: "2026-06-20", firstMonthFree: true });
+    expect(s.restAmount).toBe(0);
+    expect(s.bars).toEqual([349, 349, 349]);
+  });
+
+  it("end-of-month port has no rest days", () => {
+    const s = invoiceSchedule({ planMonthly: 349, addonsMonthly: 0, portDate: "2026-06-30", firstMonthFree: false });
+    expect(s.restDays).toBe(0);
+    expect(s.restAmount).toBe(0);
+  });
+
+  it("labels are the next three months, with year rollover", () => {
+    const s = invoiceSchedule({ planMonthly: 349, addonsMonthly: 0, portDate: "2026-11-15", firstMonthFree: false });
+    expect(s.portMonth).toBe("November");
+    expect(s.labels).toEqual(["Desember", "Januar", "Februar"]);
+  });
+
+  it("monthNameNb capitalises the Norwegian month", () => {
+    expect(monthNameNb(new Date(2026, 5, 1))).toBe("Juni");
+    expect(monthNameNb(new Date(2026, 0, 1))).toBe("Januar");
+  });
+});
+
+describe("edge cases / battle test", () => {
+  it("getPlan and getFamilyPool throw on an unknown id", () => {
+    expect(() => getPlan("nope")).toThrow();
+    expect(() => getFamilyPool("nope")).toThrow();
+  });
+
+  it("an unknown add-on id contributes 0 (silently ignored, not NaN)", () => {
+    const line: Line = { id: "x", planId: "1gb", discounts: [], addonIds: ["does-not-exist"] };
+    expect(lineTotal(line)).toBe(249);
+  });
+
+  it("familyAverage guards against zero or negative members", () => {
+    const pool = getFamilyPool("f20");
+    expect(familyAverage(0, pool, false)).toBe(0);
+    expect(familyAverage(-3, pool, true)).toBe(0);
+  });
+
+  it("quoteTotals on an empty line list is all zeros, no NaN average", () => {
+    const t = quoteTotals([]);
+    expect(t.monthly).toBe(0);
+    expect(t.baseMonthly).toBe(0);
+    expect(t.savingsMonthly).toBe(0);
+    expect(t.averageMonthly).toBe(0);
+  });
+
+  it("formatKr rounds half-up and renders whole kroner", () => {
+    expect(formatKr(0)).toBe("0,-");
+    expect(formatKr(179.28)).toBe("179,-");
+    expect(formatKr(358.56)).toBe("359,-");
+    expect(formatKr(0.5)).toBe("1,-");
+  });
+
+  it("formatKr uses the nb-NO thousands separator for 4-digit values", () => {
+    expect(formatKr(1044)).toBe(`${(1044).toLocaleString("nb-NO")},-`);
+  });
+
+  it("samlerabatt 20% never touches the flat U13 plan (flat short-circuits)", () => {
+    const u13 = getPlan("1gb_u13");
+    expect(discountApplies("samle20", u13)).toBe(false);
+    expect(discountedPlanPrice(u13, ["samle20"])).toBe(99);
+  });
+
+  it("every data-table id round-trips through its getter (catches typo'd ids)", () => {
+    for (const p of PLANS) expect(getPlan(p.id).id).toBe(p.id);
+    for (const f of FAMILY_POOLS) expect(getFamilyPool(f.id).id).toBe(f.id);
+    for (const a of ADDONS) {
+      const line: Line = { id: "t", planId: "1gb", discounts: [], addonIds: [a.id] };
+      expect(lineTotal(line)).toBe(249 + a.price);
+    }
   });
 });

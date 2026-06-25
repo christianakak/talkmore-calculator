@@ -1,248 +1,126 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import FamilyCard from "@/components/FamilyCard";
-import LineCard from "@/components/LineCard";
-import QuoteSummary from "@/components/QuoteSummary";
-import {
-  FAMILY_POOLS,
-  PLANS,
-  PRICES_SOURCE,
-  PRICES_VERIFIED,
-  type FamilyConfig,
-  type Line,
-  combinedTotals,
-  formatKr,
-} from "@/lib/pricing";
+import Accordion from "@/components/Accordion";
+import Calculator from "@/components/Calculator";
+import FamilyCalculator from "@/components/FamilyCalculator";
+import { BENEFITS, PRICES_SOURCE, PRICES_VERIFIED } from "@/lib/pricing";
 
-const STORAGE_KEY = "talkmore-quote-v1";
-
-function newLine(id: string): Line {
-  return { id, planId: "10gb", discounts: ["u30"], addonIds: [] };
-}
-function newFamily(id: string): FamilyConfig {
-  return { id, members: 2, poolId: "f20", samlerabatt: false };
-}
-
-const planIds = new Set(PLANS.map((p) => p.id));
-const poolIds = new Set(FAMILY_POOLS.map((p) => p.id));
-
-// Defensive load: drop anything referencing a plan/pool that no longer exists.
-function sanitize(data: unknown): { lines: Line[]; families: FamilyConfig[]; counter: number } | null {
-  if (!data || typeof data !== "object") return null;
-  const d = data as { lines?: unknown; families?: unknown; counter?: unknown };
-  const lines = Array.isArray(d.lines)
-    ? (d.lines as Line[]).filter((l) => l && planIds.has(l.planId))
-    : [];
-  const families = Array.isArray(d.families)
-    ? (d.families as FamilyConfig[]).filter((f) => f && poolIds.has(f.poolId))
-    : [];
-  const counter = typeof d.counter === "number" ? d.counter : 1;
-  return { lines, families, counter };
-}
+const TYPE_KEY = "tm-type-v1";
+type Kind = "enkelt" | "familie";
 
 export default function Page() {
-  const counter = useRef(1);
+  const [kind, setKind] = useState<Kind>("enkelt");
   const loaded = useRef(false);
-  const [lines, setLines] = useState<Line[]>(() => [newLine("line-0")]);
-  const [families, setFamilies] = useState<FamilyConfig[]>([]);
-  const [showSummary, setShowSummary] = useState(false);
 
-  // Load any saved quote once on mount. Reading localStorage in a lazy initializer
-  // would diverge from the server render and trip hydration, so we load in an effect.
   useEffect(() => {
     try {
-      const raw = localStorage.getItem(STORAGE_KEY);
-      if (raw) {
-        const data = sanitize(JSON.parse(raw));
-        if (data && (data.lines.length || data.families.length)) {
-          // eslint-disable-next-line react-hooks/set-state-in-effect -- intentional hydration-safe load
-          setLines(data.lines);
-          setFamilies(data.families);
-          counter.current = Math.max(data.counter, 1);
-        }
+      const raw = localStorage.getItem(TYPE_KEY);
+      if (raw === "familie" || raw === "enkelt") {
+        // eslint-disable-next-line react-hooks/set-state-in-effect -- hydration-safe load
+        setKind(raw);
       }
     } catch {
-      // ignore corrupt storage
+      // ignore
     }
     loaded.current = true;
   }, []);
 
-  // Persist on every change (after the initial load).
   useEffect(() => {
     if (!loaded.current) return;
     try {
-      localStorage.setItem(
-        STORAGE_KEY,
-        JSON.stringify({ lines, families, counter: counter.current }),
-      );
+      localStorage.setItem(TYPE_KEY, kind);
     } catch {
-      // storage full / unavailable: non-fatal
+      // non-fatal
     }
-  }, [lines, families]);
-
-  const totals = combinedTotals(lines, families);
-  const isEmpty = lines.length === 0 && families.length === 0;
-
-  function addLine() {
-    setLines((prev) => [...prev, newLine(`line-${counter.current++}`)]);
-  }
-  function duplicateLine(line: Line) {
-    setLines((prev) => {
-      const i = prev.findIndex((l) => l.id === line.id);
-      const copy: Line = { ...line, addonIds: [...line.addonIds], discounts: [...line.discounts], id: `line-${counter.current++}` };
-      const next = [...prev];
-      next.splice(i + 1, 0, copy);
-      return next;
-    });
-  }
-  function addFamily() {
-    setFamilies((prev) => [...prev, newFamily(`fam-${counter.current++}`)]);
-  }
-  function updateLine(updated: Line) {
-    setLines((prev) => prev.map((l) => (l.id === updated.id ? updated : l)));
-  }
-  function removeLine(id: string) {
-    setLines((prev) => prev.filter((l) => l.id !== id));
-  }
-  function updateFamily(updated: FamilyConfig) {
-    setFamilies((prev) => prev.map((f) => (f.id === updated.id ? updated : f)));
-  }
-  function removeFamily(id: string) {
-    setFamilies((prev) => prev.filter((f) => f.id !== id));
-  }
-  function reset() {
-    setLines([newLine(`line-${counter.current++}`)]);
-    setFamilies([]);
-    setShowSummary(false);
-  }
+  }, [kind]);
 
   return (
-    <div className="relative z-10 flex-1 flex flex-col">
-      {/* Chrome */}
-      <div className="flex items-center justify-between px-6 sm:px-9 pb-1 pt-[max(1.75rem,calc(env(safe-area-inset-top)+0.5rem))]">
-        <span className="font-display text-[19px] font-bold tracking-tight text-ink">
-          Talkmore<span className="text-accent">.</span>
-        </span>
-        <span className="eyebrow text-ink">Salgskalkulator</span>
+    <main className="relative z-10 mx-auto w-full max-w-[680px] flex-1 px-4 pb-16 pt-7">
+      {/* Header */}
+      <header className="px-1 pb-5">
+        <div className="text-[14px] font-bold tracking-[0.04em] text-ink">
+          Talkmore<span className="text-teal-d">.</span>{" "}
+          <span className="font-normal text-muted">Priskalkulator</span>
+        </div>
+        <h1 className="mt-3.5 text-[clamp(30px,7vw,42px)]">Priskalkulator 📱</h1>
+        <p className="mt-2 max-w-[46ch] text-muted">
+          Sett sammen kundens Talkmore-abonnement og se pris, rabatt og første faktura — rett i
+          hånden ute på stand.
+        </p>
+      </header>
+
+      {/* Explainers */}
+      <Accordion title="Hvorfor er første faktura høyere?" defaultOpen>
+        <p className="mb-2.5">
+          Når en kunde porterer til Talkmore betaler de for <b>resten av dagene i inneværende
+          måned</b> i tillegg til den første hele måneden — alt på den <b>første fakturaen</b>.
+          Fakturaen sendes alltid den <b>1. i påfølgende måned</b>.
+        </p>
+        <p className="mb-2.5">
+          Derfor blir den <b>første fakturaen alltid høyere</b> enn den faste månedsprisen. Månedene
+          etter er helt vanlige.
+        </p>
+        <div className="mt-3 rounded-[14px] border border-line bg-[#fafafa] px-4 py-3.5">
+          <span className="mb-2 inline-block rounded-full bg-teal-bg px-2.5 py-[3px] text-[11px] font-bold uppercase tracking-[0.08em] text-teal-d">
+            Eksempel
+          </span>
+          <ul className="ml-[18px] list-disc text-[13.8px]">
+            <li className="mb-1.5">
+              Porteringsdato <b>20. juni</b>, månedspris <b>349 kr</b>.
+            </li>
+            <li className="mb-1.5">
+              349 kr / 30 dager = <b>11,63 kr per dag</b>. 10 dager igjen i juni = <b>116 kr</b>.
+            </li>
+            <li className="mb-1.5">
+              <b>1. faktura (1. juli):</b> 116 kr + 349 kr (juli) = <b>465 kr</b>.
+            </li>
+            <li>
+              <b>August og september:</b> 349 kr som normalt. ✅
+            </li>
+          </ul>
+        </div>
+        <div className="mt-2.5 rounded-[12px] border border-[#dff0f7] bg-[#f6fbfd] px-3.5 py-3 text-[13.5px] text-[#3c6c80]">
+          💡 <b>Tilleggstjenester (VAS)</b> og <b>«Første måned gratis»</b> dekker akkurat disse
+          restdagene — de er gratis i porteringsmåneden, og full pris fra første hele måned.
+        </div>
+      </Accordion>
+
+      <Accordion title="Fordeler i abonnementet">
+        <ul className="grid grid-cols-2 gap-x-5 text-[13.8px]">
+          {BENEFITS.map((b) => (
+            <li key={b} className="mb-1.5 ml-[18px] list-disc break-inside-avoid">
+              {b}
+            </li>
+          ))}
+        </ul>
+      </Accordion>
+
+      {/* Calculator card */}
+      <div className="mt-6 rounded-[18px] border border-ink/15 bg-card px-[18px] py-5 shadow-[0_3px_14px_rgba(0,0,0,0.07)]">
+        {/* Enkelt / Familie segmented control */}
+        <div className="flex rounded-[12px] bg-[#f3f3f3] p-1">
+          {(["enkelt", "familie"] as Kind[]).map((k) => (
+            <button
+              key={k}
+              type="button"
+              onClick={() => setKind(k)}
+              className={`flex-1 rounded-[9px] px-1.5 py-[9px] text-[13.5px] font-semibold transition ${
+                kind === k ? "bg-ink text-white" : "text-muted"
+              }`}
+            >
+              {k === "enkelt" ? "Enkeltabonnement" : "Familieabonnement"}
+            </button>
+          ))}
+        </div>
+
+        <div className="mt-1">{kind === "enkelt" ? <Calculator /> : <FamilyCalculator />}</div>
       </div>
 
-      <main className="flex-1 px-5 sm:px-9 pb-44">
-        <div className="max-w-[640px] mx-auto">
-          {/* Heading */}
-          <header className="reveal pt-8 pb-6">
-            <div className="flex items-start justify-between gap-4">
-              <div>
-                <p className="eyebrow mb-3">Tilbud</p>
-                <h1 className="text-[clamp(30px,7vw,44px)]">Sett sammen et tilbud.</h1>
-              </div>
-              {!isEmpty && (
-                <button
-                  type="button"
-                  onClick={reset}
-                  className="mt-1 shrink-0 text-[13px] font-medium text-ink-soft hover:text-ink border border-line rounded-full px-3.5 py-1.5 transition"
-                >
-                  Nullstill
-                </button>
-              )}
-            </div>
-            <p className="text-ink-soft mt-3 max-w-[44ch]">
-              Bland enkeltabonnement og familie i samme tilbud. Velg rabatter og se total,
-              snittpris og besparelse.
-            </p>
-          </header>
-
-          <div className="flex flex-col gap-3.5">
-            {lines.map((line, i) => (
-              <div
-                key={line.id}
-                className="reveal"
-                style={{ "--i": i + 1 } as React.CSSProperties}
-              >
-                <LineCard
-                  line={line}
-                  index={i}
-                  canRemove={lines.length + families.length > 1}
-                  onChange={updateLine}
-                  onDuplicate={() => duplicateLine(line)}
-                  onRemove={() => removeLine(line.id)}
-                />
-              </div>
-            ))}
-
-            {families.map((family, i) => (
-              <div key={family.id} className="reveal">
-                <FamilyCard
-                  family={family}
-                  index={i}
-                  onChange={updateFamily}
-                  onRemove={() => removeFamily(family.id)}
-                />
-              </div>
-            ))}
-
-            {isEmpty && (
-              <p className="text-center text-muted text-sm py-8">
-                Legg til et abonnement eller en familie for å starte.
-              </p>
-            )}
-
-            <div className="grid grid-cols-2 gap-2.5">
-              <button
-                type="button"
-                onClick={addLine}
-                className="rounded-[16px] border border-dashed border-line text-ink-soft font-medium py-4 hover:border-ink-soft hover:text-ink transition"
-              >
-                + Abonnement
-              </button>
-              <button
-                type="button"
-                onClick={addFamily}
-                className="rounded-[16px] border border-dashed border-line text-ink-soft font-medium py-4 hover:border-ink-soft hover:text-ink transition"
-              >
-                + Familie
-              </button>
-            </div>
-          </div>
-
-          {/* Freshness signal */}
-          <p className="text-center text-[12px] text-muted mt-8">
-            Priser verifisert {PRICES_VERIFIED} mot {PRICES_SOURCE}
-          </p>
-        </div>
-      </main>
-
-      {/* Sticky total bar */}
-      <div className="fixed inset-x-0 bottom-0 z-30 border-t border-line bg-paper/90 backdrop-blur-md">
-        <div className="max-w-[640px] mx-auto flex items-center gap-4 px-6 sm:px-4 pt-3.5 pb-[max(0.875rem,env(safe-area-inset-bottom))]">
-          <div className="flex-1 min-w-0">
-            <p className="text-[11px] uppercase tracking-[0.16em] text-muted leading-none mb-1">
-              Total · {totals.units} {totals.units === 1 ? "abonnement" : "abonnementer"}
-            </p>
-            <p className="font-display text-[26px] font-medium text-ink tnum leading-none">
-              {formatKr(totals.monthly)}
-              <span className="text-[13px] font-normal text-muted"> /mnd</span>
-            </p>
-            {totals.savingsMonthly >= 1 && (
-              <p className="text-[12px] text-accent font-medium mt-1 leading-none">
-                Sparer {formatKr(totals.savingsYearly)} i året
-              </p>
-            )}
-          </div>
-          <button
-            type="button"
-            onClick={() => setShowSummary(true)}
-            disabled={isEmpty}
-            className="shrink-0 rounded-[11px] bg-accent text-accent-ink font-semibold text-[15px] px-5 py-3.5 shadow-[0_10px_24px_rgba(47,84,235,0.26)] hover:-translate-y-0.5 hover:shadow-[0_16px_36px_rgba(47,84,235,0.34)] transition disabled:opacity-40 disabled:shadow-none disabled:translate-y-0"
-          >
-            Vis oppsummering
-          </button>
-        </div>
-      </div>
-
-      {showSummary && (
-        <QuoteSummary lines={lines} families={families} onClose={() => setShowSummary(false)} />
-      )}
-    </div>
+      {/* Footer */}
+      <footer className="mt-9 text-center text-[12px] text-muted">
+        Veiledende priser. Priser verifisert {PRICES_VERIFIED} mot {PRICES_SOURCE}.
+      </footer>
+    </main>
   );
 }

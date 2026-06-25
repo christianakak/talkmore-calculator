@@ -1,27 +1,28 @@
 import type { Metadata, Viewport } from "next";
-import { Inter, Space_Grotesk } from "next/font/google";
+import { Poppins, Questrial } from "next/font/google";
 import "./globals.css";
 
-const inter = Inter({
-  variable: "--font-inter",
+const poppins = Poppins({
+  variable: "--font-poppins",
   subsets: ["latin"],
   weight: ["400", "500", "600", "700"],
 });
 
-const spaceGrotesk = Space_Grotesk({
-  variable: "--font-space-grotesk",
+// Questrial ships a single weight (400) — used for headings and price numerals.
+const questrial = Questrial({
+  variable: "--font-questrial",
   subsets: ["latin"],
-  weight: ["400", "500", "600", "700"],
+  weight: "400",
 });
 
 export const metadata: Metadata = {
-  title: "Talkmore · Salgskalkulator",
-  description: "Regn ut månedspris og besparelse for Talkmore-abonnement.",
+  title: "Talkmore · Priskalkulator",
+  description: "Regn ut månedspris, rabatt og første faktura for Talkmore-abonnement.",
   // Behaves like an app when a rep adds it to the iPhone home screen
   appleWebApp: {
     capable: true,
     statusBarStyle: "default",
-    title: "Salgskalkulator",
+    title: "Priskalkulator",
   },
 };
 
@@ -29,7 +30,7 @@ export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
   viewportFit: "cover",
-  themeColor: "#12352d",
+  themeColor: "#2f88ad",
 };
 
 export default function RootLayout({
@@ -40,20 +41,9 @@ export default function RootLayout({
   return (
     <html
       lang="no"
-      className={`${inter.variable} ${spaceGrotesk.variable} h-full antialiased`}
+      className={`${poppins.variable} ${questrial.variable} h-full antialiased`}
     >
-      <body className="min-h-full flex flex-col relative">
-        {/* Ambient glows behind everything */}
-        <div className="glows" aria-hidden="true">
-          <span className="glow glow--1"></span>
-          <span className="glow glow--2"></span>
-        </div>
-
-        {/* Signature inner frame */}
-        <div className="frame" aria-hidden="true"></div>
-
-        {children}
-      </body>
+      <body className="min-h-full flex flex-col relative">{children}</body>
     </html>
   );
 }

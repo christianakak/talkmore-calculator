@@ -109,7 +109,7 @@ export function discountApplies(discountId: DiscountId, plan: Plan): boolean {
   return true;
 }
 
-function addonsTotal(addonIds: string[]): number {
+export function addonsTotal(addonIds: string[]): number {
   return addonIds.reduce((sum, id) => {
     const addon = ADDONS.find((a) => a.id === id);
     return sum + (addon?.price ?? 0);
@@ -190,10 +190,13 @@ export function getFamilyPool(poolId: string): FamilyPool {
   return pool;
 }
 
-/** Family monthly total: members × 210 + pool basis, optionally with 10% samlerabatt. Precise. */
+/** Samlerabatt rate for a family. Field-confirmed at 20% (the decoded bundle showed 10%). */
+export const FAMILY_SAMLERABATT_FACTOR = 0.8;
+
+/** Family monthly total: members × 210 + pool basis, optionally with 20% samlerabatt. Precise. */
 export function familyTotal(members: number, pool: FamilyPool, samlerabatt: boolean): number {
   const base = members * FAMILY_PER_MEMBER + pool.basis;
-  return samlerabatt ? base * 0.9 : base;
+  return samlerabatt ? base * FAMILY_SAMLERABATT_FACTOR : base;
 }
 
 /** Average price per member (Snittpris). Precise; round at display. */
@@ -258,4 +261,73 @@ export function combinedTotals(lines: Line[], families: FamilyConfig[]): Combine
 /** Norwegian price formatting, e.g. 1044 -> "1 044,-". */
 export function formatKr(value: number): string {
   return `${Math.round(value).toLocaleString("nb-NO")},-`;
+}
+
+// ---- First-invoice timing (porting) ----
+//
+// When a customer ports mid-month they pay for the remaining days of the porting
+// month PLUS the first whole month, both on the first invoice (sent the 1st of the
+// following month). We use the 30-day-month convention the sales team works with.
+// Value-added services and "Første måned gratis" are free during the porting month,
+// so the rest-days amount is computed on the PLAN price only — never the add-ons.
+
+export const MONTHS_NB = [
+  "januar", "februar", "mars", "april", "mai", "juni",
+  "juli", "august", "september", "oktober", "november", "desember",
+] as const;
+
+export function monthNameNb(date: Date): string {
+  const name = MONTHS_NB[date.getMonth()];
+  return name.charAt(0).toUpperCase() + name.slice(1);
+}
+
+export interface InvoiceSchedule {
+  /** Days left in the porting month under the 30-day convention. */
+  restDays: number;
+  /** Rest-days charge on the first invoice (0 if first month free or end-of-month). */
+  restAmount: number;
+  /** Recurring monthly total (plan + add-ons). */
+  monthly: number;
+  /** The first three invoice amounts: [restdays + month1, month2, month3]. */
+  bars: [number, number, number];
+  /** Month names for the three invoices (the invoice is sent the 1st of each). */
+  labels: [string, string, string];
+  /** The month the customer ports in (where the rest days fall). */
+  portMonth: string;
+}
+
+/**
+ * First three invoices for a ported subscription. `planMonthly` is the discounted
+ * plan price (no add-ons); `addonsMonthly` is added to the recurring total but is
+ * free during the porting month. Precise internally — round at display.
+ */
+export function invoiceSchedule(opts: {
+  planMonthly: number;
+  addonsMonthly: number;
+  portDate: Date | string;
+  firstMonthFree: boolean;
+}): InvoiceSchedule {
+  const { planMonthly, addonsMonthly, firstMonthFree } = opts;
+  const d = opts.portDate instanceof Date ? opts.portDate : new Date(`${opts.portDate}T00:00:00`);
+  const valid = !Number.isNaN(d.getTime());
+  const day = valid ? d.getDate() : 1;
+
+  const restDays = Math.max(0, 30 - day);
+  const restAmount = firstMonthFree ? 0 : Math.round((planMonthly / 30) * restDays);
+  const monthly = planMonthly + addonsMonthly;
+
+  // Invoice k (k = 1..3) is sent the 1st of the k-th month after the porting month.
+  const ref = valid ? d : new Date();
+  const labels = [1, 2, 3].map((k) =>
+    monthNameNb(new Date(ref.getFullYear(), ref.getMonth() + k, 1)),
+  ) as [string, string, string];
+
+  return {
+    restDays,
+    restAmount,
+    monthly,
+    bars: [restAmount + monthly, monthly, monthly],
+    labels,
+    portMonth: monthNameNb(ref),
+  };
 }

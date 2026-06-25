@@ -1,8 +1,8 @@
-# Talkmore – Salgskalkulator
+# Talkmore – Priskalkulator
 
-Mobile-first field-sales calculator for Talkmore subscriptions. A rep assembles a
-multi-line household quote, sees the combined monthly price and yearly savings vs full
-(Platinum) price, and shows the customer a clean summary.
+Mobile-first field-sales calculator for Talkmore subscriptions. A rep configures a single
+customer's subscription (or family), sets a porting date, and shows the customer the fixed
+monthly price plus the "first 3 invoices" chart that explains why the first invoice is higher.
 
 ## Run
 
@@ -15,13 +15,14 @@ npm run build    # production build
 
 ## How it works
 
-- **`lib/pricing.ts`** — single source of truth. All plans, add-ons, benefits and the
-  money math (`lineTotal`, `quoteTotals`) live here. Prices are the exact values printed
-  on the source price sheet.
-- **`app/page.tsx`** — the calculator: a list of subscription lines + a sticky total bar.
-- **`components/LineCard.tsx`** — one line: plan, discount tier, add-ons.
-- **`components/QuoteSummary.tsx`** — the customer-facing summary (totals, savings,
-  included benefits, copy-as-text).
+- **`lib/pricing.ts`** — single source of truth. Plans, add-ons, benefits, the verified
+  discount math (`discountedPlanPrice`), the family math (`familyTotal`), and the
+  first-invoice timing (`invoiceSchedule`). Verified against `talkmore.kundeportal.no`
+  (see `docs/official-pricing.md`).
+- **`app/page.tsx`** — the calculator shell: the Enkelt / Familie switch + explainers.
+- **`components/Calculator.tsx`** — Enkelt: plan, porting date, discounts, VAS, hero, chart.
+- **`components/FamilyCalculator.tsx`** — Familie: pool, members, samlerabatt, hero, chart.
+- **`components/InvoiceChart.tsx`** — the first-3-invoices bar chart + breakdown text.
 
 ## Pricing data (kr/mnd)
 

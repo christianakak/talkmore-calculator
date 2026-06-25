@@ -1,49 +1,57 @@
 @import "tailwindcss";
 
 /* ============================================================
-   BTY GRUPPEN · DESIGN TOKENS (from brand/design-tokens.css)
-   Deep petrol green on warm paper. Royal blue as a scalpel only.
+   TALKMORE PRISKALKULATOR · DESIGN TOKENS
+   Clean teal on white. Calm, dense, mobile-first for field sales.
    ============================================================ */
 :root {
-  --ink: #12352d; /* deep petrol green · primary text + brand */
-  --ink-soft: #2e5249; /* secondary text, captions */
-  --paper: #f6f5f1; /* warm off-white page background */
+  --ink: #2b2b2b; /* primary text */
+  --ink-soft: #555a55; /* secondary text */
+  --muted: #7a7a7a; /* captions, hints */
+  --paper: #ffffff; /* page background */
+  --paper-2: #f2fafd; /* tinted selected/teal surface */
   --card: #ffffff; /* cards, panels */
-  --line: #e2e0d7; /* hairlines, the signature inner frame */
-  --accent: #2f54eb; /* royal blue · interaction + data highlights ONLY */
+  --line: #ececec; /* hairlines, borders */
+
+  --teal: #5db6d9; /* brand teal */
+  --teal-d: #2f88ad; /* deep teal · interaction + data highlights */
+  --teal-bg: #f2fafd; /* teal wash for selected states */
+
+  --accent: #2f88ad; /* maps to deep teal */
   --accent-ink: #ffffff;
-  --accent-dim: #e7ecfe;
-  --muted: #8a8e84;
-  --paper-2: #efede6;
+  --accent-dim: #f2fafd;
 
-  --shadow: 0 10px 34px rgba(18, 53, 45, 0.1);
-  --shadow-lg: 0 32px 80px rgba(18, 53, 45, 0.16);
+  --warn-bg: #fff1e8; /* first-invoice delta */
+  --warn-tx: #c0531f;
+  --warn-line: #ffd9c2;
 
-  --display: var(--font-space-grotesk), "Manrope", sans-serif;
-  --sans: var(--font-inter), system-ui, -apple-system, sans-serif;
+  --shadow: 0 3px 14px rgba(47, 136, 173, 0.08);
+  --shadow-lg: 0 16px 40px rgba(47, 136, 173, 0.14);
 
-  --frame: 14px; /* signature inner frame inset (compact on mobile) */
+  --display: var(--font-questrial), "Manrope", sans-serif;
+  --sans: var(--font-poppins), system-ui, -apple-system, sans-serif;
+
   --ease: cubic-bezier(0.22, 0.61, 0.36, 1);
 }
 
-@media (min-width: 640px) {
-  :root {
-    --frame: 24px;
-  }
-}
-
-/* Map tokens to Tailwind utilities (bg-paper, text-ink, border-line, text-accent, ...) */
+/* Map tokens to Tailwind utilities (bg-paper, text-ink, border-line, text-teal-d, ...) */
 @theme inline {
   --color-ink: var(--ink);
   --color-ink-soft: var(--ink-soft);
+  --color-muted: var(--muted);
   --color-paper: var(--paper);
   --color-paper-2: var(--paper-2);
   --color-card: var(--card);
   --color-line: var(--line);
+  --color-teal: var(--teal);
+  --color-teal-d: var(--teal-d);
+  --color-teal-bg: var(--teal-bg);
   --color-accent: var(--accent);
   --color-accent-ink: var(--accent-ink);
   --color-accent-dim: var(--accent-dim);
-  --color-muted: var(--muted);
+  --color-warn: var(--warn-tx);
+  --color-warn-bg: var(--warn-bg);
+  --color-warn-line: var(--warn-line);
   --font-display: var(--display);
   --font-sans: var(--sans);
 }
@@ -53,12 +61,20 @@ html {
 }
 
 body {
-  background: var(--paper);
   color: var(--ink);
+  background: var(--paper);
   font-family: var(--sans);
   line-height: 1.55;
+  min-height: 100vh;
   -webkit-font-smoothing: antialiased;
   text-rendering: optimizeLegibility;
+  /* Soft teal blooms in the corners — the reference's signature backdrop. */
+  background-image:
+    radial-gradient(420px 300px at 108% -4%, rgba(93, 182, 217, 0.28), transparent 70%),
+    radial-gradient(380px 280px at -10% 22%, rgba(93, 182, 217, 0.16), transparent 70%),
+    radial-gradient(460px 340px at 112% 78%, rgba(123, 174, 212, 0.2), transparent 70%),
+    radial-gradient(360px 280px at -8% 102%, rgba(93, 182, 217, 0.22), transparent 70%);
+  background-attachment: fixed;
 }
 
 h1,
@@ -66,95 +82,44 @@ h2,
 h3 {
   font-family: var(--display);
   color: var(--ink);
-  font-weight: 500;
-  line-height: 1.04;
-  letter-spacing: -0.02em;
+  font-weight: 400;
+  line-height: 1.08;
   text-wrap: balance;
 }
 
 .eyebrow {
-  font-size: 13px;
+  font-size: 11px;
   font-weight: 600;
-  letter-spacing: 0.2em;
+  letter-spacing: 0.12em;
   text-transform: uppercase;
-  color: var(--accent);
+  color: var(--muted);
 }
 
-/* Tabular display numerals for metrics */
+/* Tabular display numerals for prices */
 .tnum {
   font-family: var(--display);
   font-variant-numeric: tabular-nums;
-  letter-spacing: -0.025em;
 }
 
 button {
   touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
 }
 
-/* ---- Signature inner frame (every view) ---- */
-.frame {
-  position: fixed;
-  inset: var(--frame);
-  border: 1px solid var(--line);
-  border-radius: 4px;
-  pointer-events: none;
-  /* Behind content so the sticky bottom bar cleanly covers its lower edge */
-  z-index: 5;
+/* ---- Accordion chevron ---- */
+.chev {
+  transition: transform 0.25s var(--ease);
 }
-
-/* ---- Ambient glows: soft, slow petrol + blue blooms ---- */
-.glows {
-  position: fixed;
-  inset: 0;
-  z-index: 0;
-  pointer-events: none;
-  overflow: hidden;
-}
-.glow {
-  position: absolute;
-  border-radius: 50%;
-  filter: blur(72px);
-  will-change: transform;
-}
-.glow--1 {
-  width: 70vw;
-  height: 70vw;
-  top: -22vw;
-  right: -16vw;
-  background: radial-gradient(circle, rgba(47, 84, 235, 0.16), transparent 66%);
-}
-.glow--2 {
-  width: 64vw;
-  height: 64vw;
-  bottom: -24vw;
-  left: -18vw;
-  background: radial-gradient(circle, rgba(18, 53, 45, 0.12), transparent 66%);
-}
-@media (prefers-reduced-motion: no-preference) {
-  .glow--1 {
-    animation: gdrift1 22s ease-in-out infinite alternate;
-  }
-  .glow--2 {
-    animation: gdrift2 26s ease-in-out infinite alternate;
-  }
-}
-@keyframes gdrift1 {
-  to {
-    transform: translate(-5vw, 4vw) scale(1.12);
-  }
-}
-@keyframes gdrift2 {
-  to {
-    transform: translate(5vw, -4vw) scale(1.1);
-  }
+details[open] .chev {
+  transform: rotate(180deg);
 }
 
 /* ---- Entrance: gentle staggered fade-up ---- */
 .reveal {
   opacity: 0;
-  transform: translateY(20px);
-  animation: fadeup 0.6s var(--ease) forwards;
-  animation-delay: calc(var(--i, 0) * 70ms);
+  transform: translateY(16px);
+  animation: fadeup 0.55s var(--ease) forwards;
+  animation-delay: calc(var(--i, 0) * 60ms);
 }
 @keyframes fadeup {
   to {
@@ -162,10 +127,15 @@ button {
     transform: none;
   }
 }
+
 @media (prefers-reduced-motion: reduce) {
   .reveal {
     opacity: 1;
     transform: none;
     animation: none;
+  }
+  * {
+    animation: none !important;
+    transition: none !important;
   }
 }
