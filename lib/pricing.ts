@@ -20,6 +20,22 @@ export const DISCOUNTS: Discount[] = [
   { id: "samle20", label: "Samlerabatt 20%", factor: 0.8, note: "Ikke på Ubegrenset Maksimal" },
 ];
 
+// Discounts split into mutually-exclusive groups: a customer gets at most one
+// Samlerabatt rate and at most one U30 level. Selecting one clears its group siblings.
+// (For any realistic combination the resulting math is identical to the official cart.)
+const DISCOUNT_GROUPS: DiscountId[][] = [
+  ["samle", "samle20"],
+  ["u30", "u3030", "u3035"],
+];
+
+/** Toggle a discount, enforcing single-select within its group. */
+export function toggleDiscount(current: DiscountId[], id: DiscountId): DiscountId[] {
+  const wasSelected = current.includes(id);
+  const group = DISCOUNT_GROUPS.find((g) => g.includes(id)) ?? [id];
+  const withoutGroup = current.filter((d) => !group.includes(d));
+  return wasSelected ? withoutGroup : [...withoutGroup, id];
+}
+
 export interface Plan {
   id: string;
   name: string;
@@ -104,7 +120,10 @@ function addonsTotal(addonIds: string[]): number {
   }, 0);
 }
 
-/** Plan price after all selected discounts, applied in the official order, rounded to whole kr. */
+// Money is kept PRECISE internally and rounded only at display (formatKr), so a
+// multi-line total matches the official cart exactly (it sums precise, then rounds).
+
+/** Plan price after all selected discounts, applied in the official order. Precise (unrounded). */
 export function discountedPlanPrice(plan: Plan, discounts: DiscountId[]): number {
   let price = plan.price;
   for (const d of DISCOUNTS) {
@@ -112,7 +131,7 @@ export function discountedPlanPrice(plan: Plan, discounts: DiscountId[]): number
     if (!discountApplies(d.id, plan)) continue;
     price *= d.factor;
   }
-  return Math.round(price);
+  return price;
 }
 
 /** Monthly total for a single line: discounted plan price + selected add-ons. */
@@ -144,7 +163,7 @@ export function quoteTotals(lines: Line[]): QuoteTotals {
     baseMonthly,
     savingsMonthly,
     savingsYearly: savingsMonthly * 12,
-    averageMonthly: lines.length ? Math.round(monthly / lines.length) : 0,
+    averageMonthly: lines.length ? monthly / lines.length : 0,
   };
 }
 
@@ -175,16 +194,16 @@ export function getFamilyPool(poolId: string): FamilyPool {
   return pool;
 }
 
-/** Family monthly total: members × 210 + pool basis, optionally with 10% samlerabatt. */
+/** Family monthly total: members × 210 + pool basis, optionally with 10% samlerabatt. Precise. */
 export function familyTotal(members: number, pool: FamilyPool, samlerabatt: boolean): number {
   const base = members * FAMILY_PER_MEMBER + pool.basis;
-  return Math.round(samlerabatt ? base * 0.9 : base);
+  return samlerabatt ? base * 0.9 : base;
 }
 
-/** Average price per member (Snittpris). */
+/** Average price per member (Snittpris). Precise; round at display. */
 export function familyAverage(members: number, pool: FamilyPool, samlerabatt: boolean): number {
   if (members <= 0) return 0;
-  return Math.round(familyTotal(members, pool, samlerabatt) / members);
+  return familyTotal(members, pool, samlerabatt) / members;
 }
 
 /** A configured family block in a quote. */
@@ -236,7 +255,7 @@ export function combinedTotals(lines: Line[], families: FamilyConfig[]): Combine
     savingsMonthly,
     savingsYearly: savingsMonthly * 12,
     units,
-    averageMonthly: units ? Math.round(monthly / units) : 0,
+    averageMonthly: units ? monthly / units : 0,
   };
 }
 

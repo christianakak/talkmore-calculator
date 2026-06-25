@@ -2,15 +2,16 @@
 
 import {
   ADDONS,
-  DISCOUNTS,
-  PLANS,
   type DiscountId,
   type Line,
+  type Plan,
   discountApplies,
   discountedPlanPrice,
   formatKr,
   getPlan,
   lineTotal,
+  PLANS,
+  toggleDiscount,
 } from "@/lib/pricing";
 
 interface LineCardProps {
@@ -18,20 +19,95 @@ interface LineCardProps {
   index: number;
   canRemove: boolean;
   onChange: (line: Line) => void;
+  onDuplicate: () => void;
   onRemove: () => void;
 }
 
-export default function LineCard({ line, index, canRemove, onChange, onRemove }: LineCardProps) {
+// Discount groups rendered as single-select segmented rows.
+const SAMLE: { id: DiscountId; label: string }[] = [
+  { id: "samle", label: "10%" },
+  { id: "samle20", label: "20%" },
+];
+const U30: { id: DiscountId; label: string }[] = [
+  { id: "u30", label: "20%" },
+  { id: "u3030", label: "30%" },
+  { id: "u3035", label: "35%" },
+];
+
+function Segmented({
+  label,
+  options,
+  plan,
+  discounts,
+  onPick,
+  onClear,
+}: {
+  label: string;
+  options: { id: DiscountId; label: string }[];
+  plan: Plan;
+  discounts: DiscountId[];
+  onPick: (id: DiscountId) => void;
+  onClear: (ids: DiscountId[]) => void;
+}) {
+  const groupIds = options.map((o) => o.id);
+  const noneSelected = !discounts.some((d) => groupIds.includes(d));
+  return (
+    <div>
+      <p className="text-[12px] text-ink-soft mb-1.5">{label}</p>
+      <div className="flex gap-1.5">
+        <button
+          type="button"
+          onClick={() => onClear(groupIds)}
+          className={`flex-1 rounded-[9px] border py-2 text-[13px] transition ${
+            noneSelected
+              ? "border-ink bg-ink text-paper"
+              : "border-line text-ink-soft hover:border-ink-soft/40"
+          }`}
+        >
+          Ingen
+        </button>
+        {options.map((o) => {
+          const applies = discountApplies(o.id, plan);
+          const selected = applies && discounts.includes(o.id);
+          return (
+            <button
+              key={o.id}
+              type="button"
+              disabled={!applies}
+              onClick={() => onPick(o.id)}
+              className={`flex-1 rounded-[9px] border py-2 text-[13px] tnum transition ${
+                selected
+                  ? "border-ink bg-ink text-paper"
+                  : applies
+                    ? "border-line text-ink hover:border-ink-soft/40"
+                    : "border-line/60 text-muted/50 cursor-not-allowed"
+              }`}
+            >
+              {o.label}
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+export default function LineCard({
+  line,
+  index,
+  canRemove,
+  onChange,
+  onDuplicate,
+  onRemove,
+}: LineCardProps) {
   const plan = getPlan(line.planId);
 
-  function toggleDiscount(id: DiscountId) {
-    const has = line.discounts.includes(id);
-    onChange({
-      ...line,
-      discounts: has ? line.discounts.filter((d) => d !== id) : [...line.discounts, id],
-    });
+  function setDiscount(id: DiscountId) {
+    onChange({ ...line, discounts: toggleDiscount(line.discounts, id) });
   }
-
+  function clearGroup(ids: DiscountId[]) {
+    onChange({ ...line, discounts: line.discounts.filter((d) => !ids.includes(d)) });
+  }
   function toggleAddon(addonId: string) {
     const has = line.addonIds.includes(addonId);
     onChange({
@@ -44,7 +120,7 @@ export default function LineCard({ line, index, canRemove, onChange, onRemove }:
 
   const base = plan.price;
   const discounted = discountedPlanPrice(plan, line.discounts);
-  const hasDiscount = discounted < base;
+  const hasDiscount = Math.round(discounted) < base;
 
   return (
     <section className="rounded-[16px] bg-card border border-line">
@@ -55,16 +131,25 @@ export default function LineCard({ line, index, canRemove, onChange, onRemove }:
           </span>
           <h2 className="font-display text-[17px] font-medium text-ink">Abonnement</h2>
         </div>
-        {canRemove && (
+        <div className="flex items-center gap-3">
           <button
             type="button"
-            onClick={onRemove}
+            onClick={onDuplicate}
             className="text-[13px] font-medium text-ink-soft hover:text-ink transition-colors"
-            aria-label={`Fjern abonnement ${index + 1}`}
           >
-            Fjern
+            Kopier
           </button>
-        )}
+          {canRemove && (
+            <button
+              type="button"
+              onClick={onRemove}
+              className="text-[13px] font-medium text-ink-soft hover:text-ink transition-colors"
+              aria-label={`Fjern abonnement ${index + 1}`}
+            >
+              Fjern
+            </button>
+          )}
+        </div>
       </header>
 
       <div className="px-5 py-5 flex flex-col gap-6">
@@ -99,52 +184,30 @@ export default function LineCard({ line, index, canRemove, onChange, onRemove }:
           </div>
         </div>
 
-        {/* Discounts (stackable, exactly as the official cart) */}
-        <div className={plan.flat ? "hidden" : ""}>
-          <p className="eyebrow mb-3">Rabatter</p>
-          <div className="flex flex-col gap-2">
-            {DISCOUNTS.map((d) => {
-              const applies = discountApplies(d.id, plan);
-              const selected = applies && line.discounts.includes(d.id);
-              return (
-                <button
-                  key={d.id}
-                  type="button"
-                  disabled={!applies}
-                  onClick={() => toggleDiscount(d.id)}
-                  className={`flex items-center gap-3 rounded-[11px] border px-3.5 py-2.5 text-left transition ${
-                    selected
-                      ? "border-ink bg-paper-2"
-                      : applies
-                        ? "border-line bg-card hover:border-ink-soft/40"
-                        : "border-line/60 bg-paper-2/40 cursor-not-allowed"
-                  }`}
-                >
-                  <span
-                    className={`grid place-items-center w-5 h-5 rounded-[6px] border text-[12px] leading-none ${
-                      selected
-                        ? "border-accent bg-accent text-accent-ink"
-                        : "border-line bg-card text-transparent"
-                    }`}
-                    aria-hidden="true"
-                  >
-                    ✓
-                  </span>
-                  <span className="flex-1">
-                    <span
-                      className={`text-[14px] ${applies ? "text-ink" : "text-muted"} ${selected ? "font-medium" : ""}`}
-                    >
-                      {d.label}
-                    </span>
-                    {!applies && d.note && (
-                      <span className="block text-[11px] text-muted">{d.note}</span>
-                    )}
-                  </span>
-                </button>
-              );
-            })}
+        {/* Discounts: two single-select groups (hidden for flat plans) */}
+        {!plan.flat && (
+          <div>
+            <p className="eyebrow mb-3">Rabatter</p>
+            <div className="flex flex-col gap-3">
+              <Segmented
+                label="Samlerabatt"
+                options={SAMLE}
+                plan={plan}
+                discounts={line.discounts}
+                onPick={setDiscount}
+                onClear={clearGroup}
+              />
+              <Segmented
+                label="U30"
+                options={U30}
+                plan={plan}
+                discounts={line.discounts}
+                onPick={setDiscount}
+                onClear={clearGroup}
+              />
+            </div>
           </div>
-        </div>
+        )}
 
         {/* Add-ons */}
         <div>
