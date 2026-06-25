@@ -1,37 +1,49 @@
 @import "tailwindcss";
 
 /* ============================================================
-   TALKMORE PRISKALKULATOR · DESIGN TOKENS
-   Clean teal on white. Calm, dense, mobile-first for field sales.
+   TALKMORE PRISKALKULATOR · BTY GRUPPEN DESIGN SYSTEM
+   Deep petrol green on warm paper. Royal blue used as a scalpel:
+   interaction states, one key number, one primary CTA. Never more.
+   Fonts kept: Questrial (display) + Poppins (UI).
    ============================================================ */
 :root {
-  --ink: #2b2b2b; /* primary text */
-  --ink-soft: #555a55; /* secondary text */
-  --muted: #7a7a7a; /* captions, hints */
-  --paper: #ffffff; /* page background */
-  --paper-2: #f2fafd; /* tinted selected/teal surface */
-  --card: #ffffff; /* cards, panels */
-  --line: #ececec; /* hairlines, borders */
+  --ink: #12352d; /* deep petrol green · primary text + brand, dominant */
+  --ink-soft: #2e5249; /* secondary text, captions */
+  --muted: #8a8e84; /* captions, hints, disabled */
+  --paper: #f6f5f1; /* warm off-white page background (never pure white) */
+  --paper-2: #efede6; /* slightly deeper panel tint */
+  --card: #ffffff; /* cards, panels on paper */
+  --line: #e2e0d7; /* hairlines + the signature inner frame */
 
-  --teal: #5db6d9; /* brand teal */
-  --teal-d: #2f88ad; /* deep teal · interaction + data highlights */
-  --teal-bg: #f2fafd; /* teal wash for selected states */
+  --accent: #2f54eb; /* BTY royal blue · interaction + data highlights ONLY */
+  --accent-ink: #ffffff; /* text on royal blue */
+  --accent-dim: #e7ecfe; /* blue wash for soft fills (selected chips, hover) */
 
-  --accent: #2f88ad; /* maps to deep teal */
-  --accent-ink: #ffffff;
-  --accent-dim: #f2fafd;
+  /* Legacy "teal" token names from the Talkmore palette are repointed to the
+     royal-blue accent so existing interaction-state utilities re-skin cleanly. */
+  --teal: #2f54eb;
+  --teal-d: #2f54eb;
+  --teal-bg: #e7ecfe;
 
-  --warn-bg: #fff1e8; /* first-invoice delta */
-  --warn-tx: #c0531f;
-  --warn-line: #ffd9c2;
+  /* "warn" is repurposed as the first-invoice data highlight (accent). */
+  --warn-bg: #e7ecfe;
+  --warn-tx: #2f54eb;
+  --warn-line: #e2e0d7;
 
-  --shadow: 0 3px 14px rgba(47, 136, 173, 0.08);
-  --shadow-lg: 0 16px 40px rgba(47, 136, 173, 0.14);
+  --shadow: 0 10px 34px rgba(18, 53, 45, 0.1);
+  --shadow-lg: 0 32px 80px rgba(18, 53, 45, 0.16);
 
   --display: var(--font-questrial), "Manrope", sans-serif;
   --sans: var(--font-poppins), system-ui, -apple-system, sans-serif;
 
+  --frame: 14px; /* signature inner-frame inset (mobile-first) */
   --ease: cubic-bezier(0.22, 0.61, 0.36, 1);
+}
+
+@media (min-width: 640px) {
+  :root {
+    --frame: 24px;
+  }
 }
 
 /* Map tokens to Tailwind utilities (bg-paper, text-ink, border-line, text-teal-d, ...) */
@@ -68,13 +80,6 @@ body {
   min-height: 100vh;
   -webkit-font-smoothing: antialiased;
   text-rendering: optimizeLegibility;
-  /* Soft teal blooms in the corners — the reference's signature backdrop. */
-  background-image:
-    radial-gradient(420px 300px at 108% -4%, rgba(93, 182, 217, 0.28), transparent 70%),
-    radial-gradient(380px 280px at -10% 22%, rgba(93, 182, 217, 0.16), transparent 70%),
-    radial-gradient(460px 340px at 112% 78%, rgba(123, 174, 212, 0.2), transparent 70%),
-    radial-gradient(360px 280px at -8% 102%, rgba(93, 182, 217, 0.22), transparent 70%);
-  background-attachment: fixed;
 }
 
 h1,
@@ -83,16 +88,18 @@ h3 {
   font-family: var(--display);
   color: var(--ink);
   font-weight: 400;
-  line-height: 1.08;
+  line-height: 1.06;
+  letter-spacing: -0.01em;
   text-wrap: balance;
 }
 
+/* Eyebrows / section labels: royal-blue accent, wide positive tracking. */
 .eyebrow {
   font-size: 11px;
   font-weight: 600;
-  letter-spacing: 0.12em;
+  letter-spacing: 0.2em;
   text-transform: uppercase;
-  color: var(--muted);
+  color: var(--accent);
 }
 
 /* Tabular display numerals for prices */
@@ -104,6 +111,67 @@ h3 {
 button {
   touch-action: manipulation;
   -webkit-tap-highlight-color: transparent;
+}
+
+/* ---- Signature inner frame: a quiet architectural border on every view ---- */
+.frame {
+  position: fixed;
+  inset: var(--frame);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  pointer-events: none;
+  z-index: 40;
+}
+
+/* ---- Ambient glows: soft, slow petrol + blue blooms behind content ---- */
+.glows {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  overflow: hidden;
+}
+.glow {
+  position: absolute;
+  border-radius: 50%;
+  filter: blur(72px);
+  will-change: transform;
+}
+.glow--1 {
+  width: 70vw;
+  height: 70vw;
+  max-width: 560px;
+  max-height: 560px;
+  top: -22vw;
+  right: -14vw;
+  background: radial-gradient(circle, rgba(47, 84, 235, 0.16), transparent 66%);
+}
+.glow--2 {
+  width: 66vw;
+  height: 66vw;
+  max-width: 520px;
+  max-height: 520px;
+  bottom: -20vw;
+  left: -16vw;
+  background: radial-gradient(circle, rgba(18, 53, 45, 0.12), transparent 66%);
+}
+@media (prefers-reduced-motion: no-preference) {
+  .glow--1 {
+    animation: gdrift1 22s ease-in-out infinite alternate;
+  }
+  .glow--2 {
+    animation: gdrift2 26s ease-in-out infinite alternate;
+  }
+}
+@keyframes gdrift1 {
+  to {
+    transform: translate(-5vw, 4vw) scale(1.12);
+  }
+}
+@keyframes gdrift2 {
+  to {
+    transform: translate(5vw, -4vw) scale(1.1);
+  }
 }
 
 /* ---- Accordion chevron ---- */

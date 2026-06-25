@@ -8,7 +8,7 @@ const poppins = Poppins({
   weight: ["400", "500", "600", "700"],
 });
 
-// Questrial ships a single weight (400) — used for headings and price numerals.
+// Questrial ships a single weight (400), used for headings and price numerals.
 const questrial = Questrial({
   variable: "--font-questrial",
   subsets: ["latin"],
@@ -30,7 +30,7 @@ export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
   viewportFit: "cover",
-  themeColor: "#2f88ad",
+  themeColor: "#12352d",
 };
 
 export default function RootLayout({
@@ -43,7 +43,14 @@ export default function RootLayout({
       lang="no"
       className={`${poppins.variable} ${questrial.variable} h-full antialiased`}
     >
-      <body className="min-h-full flex flex-col relative">{children}</body>
+      <body className="min-h-full flex flex-col relative">
+        <div className="glows" aria-hidden="true">
+          <span className="glow glow--1" />
+          <span className="glow glow--2" />
+        </div>
+        <div className="frame" aria-hidden="true" />
+        {children}
+      </body>
     </html>
   );
 }

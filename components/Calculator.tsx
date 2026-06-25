@@ -138,7 +138,7 @@ export default function Calculator() {
       .join("");
 
   // Computed only once a real porting date is set (the mount effect defaults it to
-  // today) — this keeps new Date() out of the render path and avoids hydration drift.
+  // today). This keeps new Date() out of the render path and avoids hydration drift.
   const schedule = st.portDate
     ? invoiceSchedule({
         planMonthly: planPrice,
@@ -180,8 +180,8 @@ export default function Calculator() {
           );
         })}
       </select>
-      <div className="mt-2 inline-block rounded-full border border-[#d4eef6] bg-teal-bg px-3.5 py-[5px] text-[13px] font-bold text-teal-d">
-        📶 {isUnlimited ? "Ubegrenset data" : `${totalGb} GB${st.extra ? ` (inkl. +${bonusGb} GB)` : ""}`}
+      <div className="mt-2 inline-block rounded-full border border-line bg-paper-2 px-3.5 py-[5px] text-[13px] font-semibold text-ink-soft">
+        {isUnlimited ? "Ubegrenset data" : `${totalGb} GB${st.extra ? ` (inkl. +${bonusGb} GB)` : ""}`}
       </div>
 
       {/* Extra GB (informational) */}
@@ -281,16 +281,17 @@ export default function Calculator() {
       </div>
 
       {/* Hero */}
-      <div className="mt-5 rounded-[16px] border-[1.5px] border-teal bg-gradient-to-b from-[#f4fbfe] to-white px-4 py-4 text-center">
-        <div className="text-[11px] font-semibold uppercase tracking-[0.12em] text-muted">
+      <div className="mt-6 rounded-[16px] border border-line border-t-2 border-t-accent bg-card px-5 py-5 text-center shadow-[var(--shadow)]">
+        <div className="text-[11px] font-semibold uppercase tracking-[0.2em] text-muted">
           Fast månedspris
         </div>
-        <div className="font-display text-[42px] leading-[1.05] text-ink">
-          {nf(monthly)} <small className="text-[18px] text-muted">kr/mnd</small>
+        <div className="mt-1 font-display text-[46px] leading-[1.02] text-ink tnum">
+          {nf(monthly)}{" "}
+          <small className="font-sans text-[18px] font-semibold text-accent">kr/mnd</small>
         </div>
-        <div className="mt-1 text-[12.5px] text-muted">{mix}</div>
+        <div className="mt-1.5 text-[12.5px] text-ink-soft">{mix}</div>
         {saved >= 1 && (
-          <span className="mt-2 inline-block rounded-full bg-teal-bg px-3 py-[3px] text-[12px] font-bold text-teal-d">
+          <span className="mt-3 inline-block rounded-full bg-accent-dim px-3 py-[4px] text-[12px] font-bold text-accent">
             Sparer {nf(saved)} kr/mnd vs. full pris
           </span>
         )}

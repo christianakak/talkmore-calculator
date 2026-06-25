@@ -36,16 +36,23 @@ export default function Page() {
   }, [kind]);
 
   return (
-    <main className="relative z-10 mx-auto w-full max-w-[680px] flex-1 px-4 pb-16 pt-7">
+    <main className="relative z-10 mx-auto w-full max-w-[680px] flex-1 px-4 pb-16 pt-7 sm:px-6">
+      {/* Chrome */}
+      <div className="flex items-center justify-between px-1">
+        <span className="font-sans text-[19px] font-bold tracking-[0.01em] text-ink">
+          BTY<span className="text-accent">.</span>
+        </span>
+        <span className="text-[11px] font-semibold uppercase tracking-[0.2em] text-ink-soft">
+          Priskalkulator
+        </span>
+      </div>
+
       {/* Header */}
-      <header className="px-1 pb-5">
-        <div className="text-[14px] font-bold tracking-[0.04em] text-ink">
-          Talkmore<span className="text-teal-d">.</span>{" "}
-          <span className="font-normal text-muted">Priskalkulator</span>
-        </div>
-        <h1 className="mt-3.5 text-[clamp(30px,7vw,42px)]">Priskalkulator 📱</h1>
-        <p className="mt-2 max-w-[46ch] text-muted">
-          Sett sammen kundens Talkmore-abonnement og se pris, rabatt og første faktura — rett i
+      <header className="px-1 pb-5 pt-6">
+        <p className="eyebrow mb-2.5">Talkmore · salg ute på stand</p>
+        <h1 className="text-[clamp(30px,7vw,42px)]">Priskalkulator</h1>
+        <p className="mt-2.5 max-w-[46ch] text-[15px] text-ink-soft">
+          Sett sammen kundens Talkmore-abonnement og se pris, rabatt og første faktura, rett i
           hånden ute på stand.
         </p>
       </header>
@@ -54,17 +61,15 @@ export default function Page() {
       <Accordion title="Hvorfor er første faktura høyere?" defaultOpen>
         <p className="mb-2.5">
           Når en kunde porterer til Talkmore betaler de for <b>resten av dagene i inneværende
-          måned</b> i tillegg til den første hele måneden — alt på den <b>første fakturaen</b>.
-          Fakturaen sendes alltid den <b>1. i påfølgende måned</b>.
+          måned</b> i tillegg til den første hele måneden. Alt samles på den{" "}
+          <b>første fakturaen</b>, som sendes den <b>1. i påfølgende måned</b>.
         </p>
         <p className="mb-2.5">
           Derfor blir den <b>første fakturaen alltid høyere</b> enn den faste månedsprisen. Månedene
           etter er helt vanlige.
         </p>
-        <div className="mt-3 rounded-[14px] border border-line bg-[#fafafa] px-4 py-3.5">
-          <span className="mb-2 inline-block rounded-full bg-teal-bg px-2.5 py-[3px] text-[11px] font-bold uppercase tracking-[0.08em] text-teal-d">
-            Eksempel
-          </span>
+        <div className="mt-3 rounded-[14px] border border-line bg-paper-2 px-4 py-3.5">
+          <p className="eyebrow mb-2">Eksempel</p>
           <ul className="ml-[18px] list-disc text-[13.8px]">
             <li className="mb-1.5">
               Porteringsdato <b>20. juni</b>, månedspris <b>349 kr</b>.
@@ -76,13 +81,13 @@ export default function Page() {
               <b>1. faktura (1. juli):</b> 116 kr + 349 kr (juli) = <b>465 kr</b>.
             </li>
             <li>
-              <b>August og september:</b> 349 kr som normalt. ✅
+              <b>August og september:</b> 349 kr som normalt.
             </li>
           </ul>
         </div>
-        <div className="mt-2.5 rounded-[12px] border border-[#dff0f7] bg-[#f6fbfd] px-3.5 py-3 text-[13.5px] text-[#3c6c80]">
-          💡 <b>Tilleggstjenester (VAS)</b> og <b>«Første måned gratis»</b> dekker akkurat disse
-          restdagene — de er gratis i porteringsmåneden, og full pris fra første hele måned.
+        <div className="mt-2.5 rounded-[12px] border border-line bg-card px-3.5 py-3 text-[13.5px] text-ink-soft">
+          <b>Tilleggstjenester (VAS)</b> og «Første måned gratis» dekker akkurat disse restdagene:
+          de er gratis i porteringsmåneden, og full pris fra første hele måned.
         </div>
       </Accordion>
 
@@ -97,16 +102,16 @@ export default function Page() {
       </Accordion>
 
       {/* Calculator card */}
-      <div className="mt-6 rounded-[18px] border border-ink/15 bg-card px-[18px] py-5 shadow-[0_3px_14px_rgba(0,0,0,0.07)]">
+      <div className="mt-6 rounded-[18px] border border-line bg-card px-[18px] py-5 shadow-[var(--shadow)] sm:px-6">
         {/* Enkelt / Familie segmented control */}
-        <div className="flex rounded-[12px] bg-[#f3f3f3] p-1">
+        <div className="flex rounded-[12px] bg-paper-2 p-1">
           {(["enkelt", "familie"] as Kind[]).map((k) => (
             <button
               key={k}
               type="button"
               onClick={() => setKind(k)}
               className={`flex-1 rounded-[9px] px-1.5 py-[9px] text-[13.5px] font-semibold transition ${
-                kind === k ? "bg-ink text-white" : "text-muted"
+                kind === k ? "bg-ink text-white shadow-[var(--shadow)]" : "text-ink-soft"
               }`}
             >
               {k === "enkelt" ? "Enkeltabonnement" : "Familieabonnement"}
@@ -118,8 +123,13 @@ export default function Page() {
       </div>
 
       {/* Footer */}
-      <footer className="mt-9 text-center text-[12px] text-muted">
-        Veiledende priser. Priser verifisert {PRICES_VERIFIED} mot {PRICES_SOURCE}.
+      <footer className="mt-10 flex flex-col gap-1 px-1 text-[12px] text-muted">
+        <span className="font-sans font-bold tracking-[0.04em] text-ink-soft">
+          better than yesterday · btygruppen.no
+        </span>
+        <span>
+          Veiledende priser. Priser verifisert {PRICES_VERIFIED} mot {PRICES_SOURCE}.
+        </span>
       </footer>
     </main>
   );
