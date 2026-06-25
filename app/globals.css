@@ -1,0 +1,171 @@
+@import "tailwindcss";
+
+/* ============================================================
+   BTY GRUPPEN · DESIGN TOKENS (from brand/design-tokens.css)
+   Deep petrol green on warm paper. Royal blue as a scalpel only.
+   ============================================================ */
+:root {
+  --ink: #12352d; /* deep petrol green · primary text + brand */
+  --ink-soft: #2e5249; /* secondary text, captions */
+  --paper: #f6f5f1; /* warm off-white page background */
+  --card: #ffffff; /* cards, panels */
+  --line: #e2e0d7; /* hairlines, the signature inner frame */
+  --accent: #2f54eb; /* royal blue · interaction + data highlights ONLY */
+  --accent-ink: #ffffff;
+  --accent-dim: #e7ecfe;
+  --muted: #8a8e84;
+  --paper-2: #efede6;
+
+  --shadow: 0 10px 34px rgba(18, 53, 45, 0.1);
+  --shadow-lg: 0 32px 80px rgba(18, 53, 45, 0.16);
+
+  --display: var(--font-space-grotesk), "Manrope", sans-serif;
+  --sans: var(--font-inter), system-ui, -apple-system, sans-serif;
+
+  --frame: 14px; /* signature inner frame inset (compact on mobile) */
+  --ease: cubic-bezier(0.22, 0.61, 0.36, 1);
+}
+
+@media (min-width: 640px) {
+  :root {
+    --frame: 24px;
+  }
+}
+
+/* Map tokens to Tailwind utilities (bg-paper, text-ink, border-line, text-accent, ...) */
+@theme inline {
+  --color-ink: var(--ink);
+  --color-ink-soft: var(--ink-soft);
+  --color-paper: var(--paper);
+  --color-paper-2: var(--paper-2);
+  --color-card: var(--card);
+  --color-line: var(--line);
+  --color-accent: var(--accent);
+  --color-accent-ink: var(--accent-ink);
+  --color-accent-dim: var(--accent-dim);
+  --color-muted: var(--muted);
+  --font-display: var(--display);
+  --font-sans: var(--sans);
+}
+
+html {
+  -webkit-text-size-adjust: 100%;
+}
+
+body {
+  background: var(--paper);
+  color: var(--ink);
+  font-family: var(--sans);
+  line-height: 1.55;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+h1,
+h2,
+h3 {
+  font-family: var(--display);
+  color: var(--ink);
+  font-weight: 500;
+  line-height: 1.04;
+  letter-spacing: -0.02em;
+  text-wrap: balance;
+}
+
+.eyebrow {
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: var(--accent);
+}
+
+/* Tabular display numerals for metrics */
+.tnum {
+  font-family: var(--display);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.025em;
+}
+
+button {
+  touch-action: manipulation;
+}
+
+/* ---- Signature inner frame (every view) ---- */
+.frame {
+  position: fixed;
+  inset: var(--frame);
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  pointer-events: none;
+  /* Behind content so the sticky bottom bar cleanly covers its lower edge */
+  z-index: 5;
+}
+
+/* ---- Ambient glows: soft, slow petrol + blue blooms ---- */
+.glows {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  overflow: hidden;
+}
+.glow {
+  position: absolute;
+  border-radius: 50%;
+  filter: blur(72px);
+  will-change: transform;
+}
+.glow--1 {
+  width: 70vw;
+  height: 70vw;
+  top: -22vw;
+  right: -16vw;
+  background: radial-gradient(circle, rgba(47, 84, 235, 0.16), transparent 66%);
+}
+.glow--2 {
+  width: 64vw;
+  height: 64vw;
+  bottom: -24vw;
+  left: -18vw;
+  background: radial-gradient(circle, rgba(18, 53, 45, 0.12), transparent 66%);
+}
+@media (prefers-reduced-motion: no-preference) {
+  .glow--1 {
+    animation: gdrift1 22s ease-in-out infinite alternate;
+  }
+  .glow--2 {
+    animation: gdrift2 26s ease-in-out infinite alternate;
+  }
+}
+@keyframes gdrift1 {
+  to {
+    transform: translate(-5vw, 4vw) scale(1.12);
+  }
+}
+@keyframes gdrift2 {
+  to {
+    transform: translate(5vw, -4vw) scale(1.1);
+  }
+}
+
+/* ---- Entrance: gentle staggered fade-up ---- */
+.reveal {
+  opacity: 0;
+  transform: translateY(20px);
+  animation: fadeup 0.6s var(--ease) forwards;
+  animation-delay: calc(var(--i, 0) * 70ms);
+}
+@keyframes fadeup {
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .reveal {
+    opacity: 1;
+    transform: none;
+    animation: none;
+  }
+}
