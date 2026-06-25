@@ -36,19 +36,9 @@ export default function Page() {
   }, [kind]);
 
   return (
-    <main className="relative z-10 mx-auto w-full max-w-[680px] flex-1 px-4 pb-16 pt-7 sm:px-6">
-      {/* Chrome */}
-      <div className="flex items-center justify-between px-1">
-        <span className="font-sans text-[19px] font-bold tracking-[0.01em] text-ink">
-          BTY<span className="text-accent">.</span>
-        </span>
-        <span className="text-[11px] font-semibold uppercase tracking-[0.2em] text-ink-soft">
-          Priskalkulator
-        </span>
-      </div>
-
+    <main className="relative z-10 mx-auto w-full max-w-[680px] flex-1 px-4 pb-16 pt-9 sm:px-6">
       {/* Header */}
-      <header className="px-1 pb-5 pt-6">
+      <header className="px-1 pb-5">
         <p className="eyebrow mb-2.5">Talkmore · salg ute på stand</p>
         <h1 className="text-[clamp(30px,7vw,42px)]">Priskalkulator</h1>
         <p className="mt-2.5 max-w-[46ch] text-[15px] text-ink-soft">
@@ -123,13 +113,8 @@ export default function Page() {
       </div>
 
       {/* Footer */}
-      <footer className="mt-10 flex flex-col gap-1 px-1 text-[12px] text-muted">
-        <span className="font-sans font-bold tracking-[0.04em] text-ink-soft">
-          better than yesterday · btygruppen.no
-        </span>
-        <span>
-          Veiledende priser. Priser verifisert {PRICES_VERIFIED} mot {PRICES_SOURCE}.
-        </span>
+      <footer className="mt-10 px-1 text-center text-[12px] text-muted">
+        Veiledende priser. Priser verifisert {PRICES_VERIFIED} mot {PRICES_SOURCE}.
       </footer>
     </main>
   );

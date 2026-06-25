@@ -30,7 +30,7 @@ export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
   viewportFit: "cover",
-  themeColor: "#12352d",
+  themeColor: "#f7f7f8",
 };
 
 export default function RootLayout({
@@ -43,14 +43,7 @@ export default function RootLayout({
       lang="no"
       className={`${poppins.variable} ${questrial.variable} h-full antialiased`}
     >
-      <body className="min-h-full flex flex-col relative">
-        <div className="glows" aria-hidden="true">
-          <span className="glow glow--1" />
-          <span className="glow glow--2" />
-        </div>
-        <div className="frame" aria-hidden="true" />
-        {children}
-      </body>
+      <body className="min-h-full flex flex-col relative">{children}</body>
     </html>
   );
 }

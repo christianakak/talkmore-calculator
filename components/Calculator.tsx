@@ -287,7 +287,7 @@ export default function Calculator() {
         </div>
         <div className="mt-1 font-display text-[46px] leading-[1.02] text-ink tnum">
           {nf(monthly)}{" "}
-          <small className="font-sans text-[18px] font-semibold text-accent">kr/mnd</small>
+          <small className="font-sans text-[18px] font-semibold text-muted">kr/mnd</small>
         </div>
         <div className="mt-1.5 text-[12.5px] text-ink-soft">{mix}</div>
         {saved >= 1 && (

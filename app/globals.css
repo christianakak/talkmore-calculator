@@ -1,52 +1,45 @@
 @import "tailwindcss";
 
 /* ============================================================
-   TALKMORE PRISKALKULATOR · BTY GRUPPEN DESIGN SYSTEM
-   Deep petrol green on warm paper. Royal blue used as a scalpel:
-   interaction states, one key number, one primary CTA. Never more.
-   Fonts kept: Questrial (display) + Poppins (UI).
+   TALKMORE PRISKALKULATOR · DESIGN TOKENS
+   Minimal, neutral. Near-black ink on soft off-white, hairline
+   borders, monochrome emphasis. No brand color.
    ============================================================ */
 :root {
-  --ink: #12352d; /* deep petrol green · primary text + brand, dominant */
-  --ink-soft: #2e5249; /* secondary text, captions */
-  --muted: #8a8e84; /* captions, hints, disabled */
-  --paper: #f6f5f1; /* warm off-white page background (never pure white) */
-  --paper-2: #efede6; /* slightly deeper panel tint */
-  --card: #ffffff; /* cards, panels on paper */
-  --line: #e2e0d7; /* hairlines + the signature inner frame */
+  --ink: #1c1c1e; /* primary text + emphasis */
+  --ink-soft: #55555b; /* secondary text */
+  --muted: #95959c; /* captions, hints, disabled */
+  --paper: #f7f7f8; /* page background, soft off-white */
+  --paper-2: #efeff1; /* slightly deeper panel tint */
+  --card: #ffffff; /* cards, panels */
+  --line: #e6e6e9; /* hairlines, borders */
 
-  --accent: #2f54eb; /* BTY royal blue · interaction + data highlights ONLY */
-  --accent-ink: #ffffff; /* text on royal blue */
-  --accent-dim: #e7ecfe; /* blue wash for soft fills (selected chips, hover) */
+  /* Emphasis / interaction is monochrome: dark ink + a light neutral wash. */
+  --accent: #1c1c1e;
+  --accent-ink: #ffffff;
+  --accent-dim: #ededf0;
 
-  /* Legacy "teal" token names from the Talkmore palette are repointed to the
-     royal-blue accent so existing interaction-state utilities re-skin cleanly. */
-  --teal: #2f54eb;
-  --teal-d: #2f54eb;
-  --teal-bg: #e7ecfe;
+  /* Legacy "teal" token names remapped to the neutral ink so existing
+     interaction-state utilities re-skin without per-component churn. */
+  --teal: #1c1c1e;
+  --teal-d: #1c1c1e;
+  --teal-bg: #ededf0;
 
-  /* "warn" is repurposed as the first-invoice data highlight (accent). */
-  --warn-bg: #e7ecfe;
-  --warn-tx: #2f54eb;
-  --warn-line: #e2e0d7;
+  /* "warn" reused as the first-invoice data emphasis (neutral ink). */
+  --warn-bg: #ededf0;
+  --warn-tx: #1c1c1e;
+  --warn-line: #e6e6e9;
 
-  --shadow: 0 10px 34px rgba(18, 53, 45, 0.1);
-  --shadow-lg: 0 32px 80px rgba(18, 53, 45, 0.16);
+  --shadow: 0 3px 14px rgba(0, 0, 0, 0.06);
+  --shadow-lg: 0 16px 40px rgba(0, 0, 0, 0.12);
 
   --display: var(--font-questrial), "Manrope", sans-serif;
   --sans: var(--font-poppins), system-ui, -apple-system, sans-serif;
 
-  --frame: 14px; /* signature inner-frame inset (mobile-first) */
   --ease: cubic-bezier(0.22, 0.61, 0.36, 1);
 }
 
-@media (min-width: 640px) {
-  :root {
-    --frame: 24px;
-  }
-}
-
-/* Map tokens to Tailwind utilities (bg-paper, text-ink, border-line, text-teal-d, ...) */
+/* Map tokens to Tailwind utilities (bg-paper, text-ink, border-line, ...) */
 @theme inline {
   --color-ink: var(--ink);
   --color-ink-soft: var(--ink-soft);
@@ -93,13 +86,13 @@ h3 {
   text-wrap: balance;
 }
 
-/* Eyebrows / section labels: royal-blue accent, wide positive tracking. */
+/* Eyebrows / labels: quiet, uppercase, wide tracking. */
 .eyebrow {
   font-size: 11px;
   font-weight: 600;
-  letter-spacing: 0.2em;
+  letter-spacing: 0.16em;
   text-transform: uppercase;
-  color: var(--accent);
+  color: var(--muted);
 }
 
 /* Tabular display numerals for prices */
@@ -111,67 +104,6 @@ h3 {
 button {
   touch-action: manipulation;
   -webkit-tap-highlight-color: transparent;
-}
-
-/* ---- Signature inner frame: a quiet architectural border on every view ---- */
-.frame {
-  position: fixed;
-  inset: var(--frame);
-  border: 1px solid var(--line);
-  border-radius: 6px;
-  pointer-events: none;
-  z-index: 40;
-}
-
-/* ---- Ambient glows: soft, slow petrol + blue blooms behind content ---- */
-.glows {
-  position: fixed;
-  inset: 0;
-  z-index: 0;
-  pointer-events: none;
-  overflow: hidden;
-}
-.glow {
-  position: absolute;
-  border-radius: 50%;
-  filter: blur(72px);
-  will-change: transform;
-}
-.glow--1 {
-  width: 70vw;
-  height: 70vw;
-  max-width: 560px;
-  max-height: 560px;
-  top: -22vw;
-  right: -14vw;
-  background: radial-gradient(circle, rgba(47, 84, 235, 0.16), transparent 66%);
-}
-.glow--2 {
-  width: 66vw;
-  height: 66vw;
-  max-width: 520px;
-  max-height: 520px;
-  bottom: -20vw;
-  left: -16vw;
-  background: radial-gradient(circle, rgba(18, 53, 45, 0.12), transparent 66%);
-}
-@media (prefers-reduced-motion: no-preference) {
-  .glow--1 {
-    animation: gdrift1 22s ease-in-out infinite alternate;
-  }
-  .glow--2 {
-    animation: gdrift2 26s ease-in-out infinite alternate;
-  }
-}
-@keyframes gdrift1 {
-  to {
-    transform: translate(-5vw, 4vw) scale(1.12);
-  }
-}
-@keyframes gdrift2 {
-  to {
-    transform: translate(5vw, -4vw) scale(1.1);
-  }
 }
 
 /* ---- Accordion chevron ---- */
