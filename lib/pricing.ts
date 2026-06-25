@@ -25,20 +25,11 @@ export const DISCOUNTS: Discount[] = [
   { id: "samle20", label: "Samlerabatt 20%", factor: 0.8, note: "Ikke på Ubegrenset Maksimal" },
 ];
 
-// Discounts split into mutually-exclusive groups: a customer gets at most one
-// Samlerabatt rate and at most one U30 level. Selecting one clears its group siblings.
-// (For any realistic combination the resulting math is identical to the official cart.)
-const DISCOUNT_GROUPS: DiscountId[][] = [
-  ["samle", "samle20"],
-  ["u30", "u3030", "u3035"],
-];
-
-/** Toggle a discount, enforcing single-select within its group. */
+// The official tool uses ONE radio group for all discounts: a subscription gets
+// at most one discount (a U30 level OR a samlerabatt rate OR none). Selecting one
+// clears any other. This keeps prices identical to the official calculator.
 export function toggleDiscount(current: DiscountId[], id: DiscountId): DiscountId[] {
-  const wasSelected = current.includes(id);
-  const group = DISCOUNT_GROUPS.find((g) => g.includes(id)) ?? [id];
-  const withoutGroup = current.filter((d) => !group.includes(d));
-  return wasSelected ? withoutGroup : [...withoutGroup, id];
+  return current.includes(id) ? [] : [id];
 }
 
 export interface Plan {

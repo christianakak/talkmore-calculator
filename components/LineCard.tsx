@@ -4,7 +4,6 @@ import {
   ADDONS,
   type DiscountId,
   type Line,
-  type Plan,
   discountApplies,
   discountedPlanPrice,
   formatKr,
@@ -23,74 +22,14 @@ interface LineCardProps {
   onRemove: () => void;
 }
 
-// Discount groups rendered as single-select segmented rows.
-const SAMLE: { id: DiscountId; label: string }[] = [
-  { id: "samle", label: "10%" },
-  { id: "samle20", label: "20%" },
+// One single-select discount group, in the official tool's order and labels.
+const DISCOUNT_OPTIONS: { id: DiscountId; label: string }[] = [
+  { id: "u30", label: "U30 20%" },
+  { id: "u3030", label: "U30 30%" },
+  { id: "u3035", label: "U30 35%" },
+  { id: "samle", label: "10% rabatt" },
+  { id: "samle20", label: "20% rabatt" },
 ];
-const U30: { id: DiscountId; label: string }[] = [
-  { id: "u30", label: "20%" },
-  { id: "u3030", label: "30%" },
-  { id: "u3035", label: "35%" },
-];
-
-function Segmented({
-  label,
-  options,
-  plan,
-  discounts,
-  onPick,
-  onClear,
-}: {
-  label: string;
-  options: { id: DiscountId; label: string }[];
-  plan: Plan;
-  discounts: DiscountId[];
-  onPick: (id: DiscountId) => void;
-  onClear: (ids: DiscountId[]) => void;
-}) {
-  const groupIds = options.map((o) => o.id);
-  const noneSelected = !discounts.some((d) => groupIds.includes(d));
-  return (
-    <div>
-      <p className="text-[12px] text-ink-soft mb-1.5">{label}</p>
-      <div className="flex gap-1.5">
-        <button
-          type="button"
-          onClick={() => onClear(groupIds)}
-          className={`flex-1 rounded-[9px] border py-2 text-[13px] transition ${
-            noneSelected
-              ? "border-ink bg-ink text-paper"
-              : "border-line text-ink-soft hover:border-ink-soft/40"
-          }`}
-        >
-          Ingen
-        </button>
-        {options.map((o) => {
-          const applies = discountApplies(o.id, plan);
-          const selected = applies && discounts.includes(o.id);
-          return (
-            <button
-              key={o.id}
-              type="button"
-              disabled={!applies}
-              onClick={() => onPick(o.id)}
-              className={`flex-1 rounded-[9px] border py-2 text-[13px] tnum transition ${
-                selected
-                  ? "border-ink bg-ink text-paper"
-                  : applies
-                    ? "border-line text-ink hover:border-ink-soft/40"
-                    : "border-line/60 text-muted/50 cursor-not-allowed"
-              }`}
-            >
-              {o.label}
-            </button>
-          );
-        })}
-      </div>
-    </div>
-  );
-}
 
 export default function LineCard({
   line,
@@ -105,8 +44,8 @@ export default function LineCard({
   function setDiscount(id: DiscountId) {
     onChange({ ...line, discounts: toggleDiscount(line.discounts, id) });
   }
-  function clearGroup(ids: DiscountId[]) {
-    onChange({ ...line, discounts: line.discounts.filter((d) => !ids.includes(d)) });
+  function clearDiscount() {
+    onChange({ ...line, discounts: [] });
   }
   function toggleAddon(addonId: string) {
     const has = line.addonIds.includes(addonId);
@@ -184,27 +123,43 @@ export default function LineCard({
           </div>
         </div>
 
-        {/* Discounts: two single-select groups (hidden for flat plans) */}
+        {/* Discount: one single-select group (hidden for flat plans) */}
         {!plan.flat && (
           <div>
-            <p className="eyebrow mb-3">Rabatter</p>
-            <div className="flex flex-col gap-3">
-              <Segmented
-                label="Samlerabatt"
-                options={SAMLE}
-                plan={plan}
-                discounts={line.discounts}
-                onPick={setDiscount}
-                onClear={clearGroup}
-              />
-              <Segmented
-                label="U30"
-                options={U30}
-                plan={plan}
-                discounts={line.discounts}
-                onPick={setDiscount}
-                onClear={clearGroup}
-              />
+            <p className="eyebrow mb-3">Rabatt</p>
+            <div className="flex flex-wrap gap-2">
+              <button
+                type="button"
+                onClick={clearDiscount}
+                className={`rounded-full border px-3.5 py-2 text-[13px] transition ${
+                  line.discounts.length === 0
+                    ? "border-ink bg-ink text-paper"
+                    : "border-line text-ink-soft hover:border-ink-soft/40"
+                }`}
+              >
+                Ingen rabatt
+              </button>
+              {DISCOUNT_OPTIONS.map((o) => {
+                const applies = discountApplies(o.id, plan);
+                const selected = applies && line.discounts.includes(o.id);
+                return (
+                  <button
+                    key={o.id}
+                    type="button"
+                    disabled={!applies}
+                    onClick={() => setDiscount(o.id)}
+                    className={`rounded-full border px-3.5 py-2 text-[13px] transition ${
+                      selected
+                        ? "border-ink bg-ink text-paper"
+                        : applies
+                          ? "border-line text-ink hover:border-ink-soft/40"
+                          : "border-line/60 text-muted/50 cursor-not-allowed"
+                    }`}
+                  >
+                    {o.label}
+                  </button>
+                );
+              })}
             </div>
           </div>
         )}

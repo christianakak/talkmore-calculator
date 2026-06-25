@@ -130,7 +130,7 @@ export default function FamilyCard({ family, index, onChange, onRemove }: Family
         <div className="flex items-baseline justify-between border-t border-line pt-4">
           <span className="text-[13px] text-ink-soft">
             Totalpris
-            <span className="text-muted"> · snitt {formatKr(average)}</span>
+            <span className="text-muted"> · per pers {formatKr(average)}</span>
           </span>
           <span className="font-display text-2xl font-medium text-ink tnum">{formatKr(total)}</span>
         </div>

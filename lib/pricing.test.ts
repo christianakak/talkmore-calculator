@@ -88,25 +88,18 @@ describe("multi-line total matches the official cart (sum precise, then round)",
   });
 });
 
-describe("toggleDiscount — single-select within a group", () => {
-  it("picking a second U30 level replaces the first", () => {
+describe("toggleDiscount — single discount per subscription (official radio)", () => {
+  it("picking any discount replaces the current one", () => {
     let d: DiscountId[] = [];
     d = toggleDiscount(d, "u30");
     expect(d).toEqual(["u30"]);
     d = toggleDiscount(d, "u3035");
     expect(d).toEqual(["u3035"]); // u30 cleared
+    d = toggleDiscount(d, "samle"); // a samlerabatt also replaces the U30 level
+    expect(d).toEqual(["samle"]);
   });
 
-  it("samlerabatt and U30 are independent groups that coexist", () => {
-    let d: DiscountId[] = [];
-    d = toggleDiscount(d, "samle");
-    d = toggleDiscount(d, "u30");
-    expect(new Set(d)).toEqual(new Set(["samle", "u30"]));
-    d = toggleDiscount(d, "samle20"); // replaces samle within the samlerabatt group
-    expect(new Set(d)).toEqual(new Set(["samle20", "u30"]));
-  });
-
-  it("toggling the selected option off clears it", () => {
+  it("toggling the selected option off clears it (Ingen rabatt)", () => {
     expect(toggleDiscount(["u30"], "u30")).toEqual([]);
   });
 });
