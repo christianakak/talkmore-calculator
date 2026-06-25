@@ -5,12 +5,15 @@ import {
   ADDONS,
   BENEFITS,
   DISCOUNTS,
+  type FamilyConfig,
   type Line,
+  combinedTotals,
   discountApplies,
+  familyConfigTotal,
   formatKr,
+  getFamilyPool,
   getPlan,
   lineTotal,
-  quoteTotals,
 } from "@/lib/pricing";
 
 function activeDiscountLabels(line: Line): string[] {
@@ -25,21 +28,31 @@ function lineDescription(line: Line): string {
   const addons = line.addonIds
     .map((id) => ADDONS.find((a) => a.id === id)?.name)
     .filter(Boolean);
-  const parts = [`${plan.name}${plan.bonus ? ` ${plan.bonus}` : ""}`];
+  const parts = [`${plan.name}${plan.tag ? ` ${plan.tag}` : ""}${plan.bonus ? ` ${plan.bonus}` : ""}`];
   if (addons.length) parts.push(addons.join(" + "));
   return parts.join(" · ");
 }
 
 function lineSubtitle(line: Line): string {
+  if (getPlan(line.planId).flat) return "Fast pris";
   const discounts = activeDiscountLabels(line);
   return discounts.length ? discounts.join(" · ") : "Ingen rabatt";
 }
 
-function buildShareText(lines: Line[]): string {
-  const totals = quoteTotals(lines);
-  const rows = lines.map((l, i) => {
-    const sub = lineSubtitle(l);
-    return `${i + 1}. ${lineDescription(l)} (${sub}): ${formatKr(lineTotal(l))}/mnd`;
+function familyDescription(f: FamilyConfig): string {
+  const pool = getFamilyPool(f.poolId);
+  return `Familie · ${f.members} medlemmer · ${pool.name}${pool.extraGb > 0 ? ` +${pool.extraGb} GB` : ""}`;
+}
+
+function buildShareText(lines: Line[], families: FamilyConfig[]): string {
+  const totals = combinedTotals(lines, families);
+  const rows: string[] = [];
+  lines.forEach((l, i) =>
+    rows.push(`${i + 1}. ${lineDescription(l)} (${lineSubtitle(l)}): ${formatKr(lineTotal(l))}/mnd`),
+  );
+  families.forEach((f) => {
+    const sub = f.samlerabatt ? "Samlerabatt 10%" : "Ingen rabatt";
+    rows.push(`• ${familyDescription(f)} (${sub}): ${formatKr(familyConfigTotal(f))}/mnd`);
   });
   const out = ["Talkmore · tilbud", "", ...rows, "", `Total: ${formatKr(totals.monthly)}/mnd`];
   if (totals.savingsMonthly > 0) {
@@ -52,22 +65,38 @@ function buildShareText(lines: Line[]): string {
 
 interface QuoteSummaryProps {
   lines: Line[];
+  families: FamilyConfig[];
   onClose: () => void;
 }
 
-export default function QuoteSummary({ lines, onClose }: QuoteSummaryProps) {
-  const totals = quoteTotals(lines);
+export default function QuoteSummary({ lines, families, onClose }: QuoteSummaryProps) {
+  const totals = combinedTotals(lines, families);
   const [copied, setCopied] = useState(false);
 
   async function copy() {
     try {
-      await navigator.clipboard.writeText(buildShareText(lines));
+      await navigator.clipboard.writeText(buildShareText(lines, families));
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
     } catch {
       setCopied(false);
     }
   }
+
+  const rows = [
+    ...lines.map((l) => ({
+      key: l.id,
+      title: lineDescription(l),
+      subtitle: lineSubtitle(l),
+      price: lineTotal(l),
+    })),
+    ...families.map((f) => ({
+      key: f.id,
+      title: familyDescription(f),
+      subtitle: f.samlerabatt ? "Samlerabatt 10%" : "Ingen rabatt",
+      price: familyConfigTotal(f),
+    })),
+  ];
 
   return (
     <div className="fixed inset-0 z-50 flex flex-col bg-ink/30 backdrop-blur-sm">
@@ -91,21 +120,21 @@ export default function QuoteSummary({ lines, onClose }: QuoteSummaryProps) {
         </div>
 
         <div className="px-6 pt-6 pb-[max(1.5rem,calc(env(safe-area-inset-bottom)+0.5rem))] flex flex-col gap-7 max-w-[640px] mx-auto">
-          {/* Lines as hairline rows */}
+          {/* Rows */}
           <div>
-            {lines.map((line, i) => (
+            {rows.map((r, i) => (
               <div
-                key={line.id}
+                key={r.key}
                 className={`flex items-start justify-between gap-4 py-3.5 ${
                   i > 0 ? "border-t border-line" : ""
                 }`}
               >
                 <div>
-                  <p className="font-medium text-ink">{lineDescription(line)}</p>
-                  <p className="text-[12px] text-muted">{lineSubtitle(line)}</p>
+                  <p className="font-medium text-ink">{r.title}</p>
+                  <p className="text-[12px] text-muted">{r.subtitle}</p>
                 </div>
                 <span className="font-display font-medium text-ink tnum whitespace-nowrap">
-                  {formatKr(lineTotal(line))}
+                  {formatKr(r.price)}
                 </span>
               </div>
             ))}
@@ -122,7 +151,9 @@ export default function QuoteSummary({ lines, onClose }: QuoteSummaryProps) {
               </span>
             </div>
             <div className="mt-3 flex items-center justify-between text-[12px]">
-              <span className="text-paper/50">Snittpris per abonnement</span>
+              <span className="text-paper/50">
+                Snittpris · {totals.units} {totals.units === 1 ? "abonnement" : "abonnementer"}
+              </span>
               <span className="text-paper/70 tnum">{formatKr(totals.averageMonthly)}</span>
             </div>
             {totals.savingsMonthly > 0 && (

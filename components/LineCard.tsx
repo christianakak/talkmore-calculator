@@ -78,7 +78,9 @@ export default function LineCard({ line, index, canRemove, onChange, onRemove }:
                 <button
                   key={p.id}
                   type="button"
-                  onClick={() => onChange({ ...line, planId: p.id })}
+                  onClick={() =>
+                    onChange({ ...line, planId: p.id, discounts: p.flat ? [] : line.discounts })
+                  }
                   className={`flex flex-col items-start rounded-[11px] border px-3.5 py-2.5 text-left transition ${
                     selected
                       ? "border-ink bg-paper-2"
@@ -87,6 +89,7 @@ export default function LineCard({ line, index, canRemove, onChange, onRemove }:
                 >
                   <span className="font-display font-medium text-ink leading-tight">
                     {p.name}
+                    {p.tag && <span className="text-muted font-normal text-[12px]"> {p.tag}</span>}
                     {p.bonus && <span className="text-ink-soft font-normal"> {p.bonus}</span>}
                   </span>
                   <span className="text-[12px] text-muted tnum">{formatKr(p.price)}</span>
@@ -97,7 +100,7 @@ export default function LineCard({ line, index, canRemove, onChange, onRemove }:
         </div>
 
         {/* Discounts (stackable, exactly as the official cart) */}
-        <div>
+        <div className={plan.flat ? "hidden" : ""}>
           <p className="eyebrow mb-3">Rabatter</p>
           <div className="flex flex-col gap-2">
             {DISCOUNTS.map((d) => {

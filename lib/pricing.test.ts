@@ -1,15 +1,17 @@
 import { describe, expect, it } from "vitest";
 import {
   FAMILY_POOLS,
-  PLANS,
+  combinedTotals,
   discountApplies,
   discountedPlanPrice,
   familyAverage,
+  familyConfigTotal,
   familyTotal,
   getFamilyPool,
   getPlan,
   lineTotal,
   quoteTotals,
+  type FamilyConfig,
   type Line,
 } from "./pricing";
 
@@ -24,10 +26,17 @@ describe("base plan prices (match official tool)", () => {
       ub: 529,
       ub_maks: 629,
     };
-    expect(PLANS.length).toBe(7);
-    for (const plan of PLANS) {
-      expect(plan.price).toBe(expected[plan.id]);
+    for (const id of Object.keys(expected)) {
+      expect(getPlan(id).price).toBe(expected[id]);
     }
+  });
+
+  it("the U13 plan is a flat 99 with no discounts", () => {
+    const u13 = getPlan("1gb_u13");
+    expect(u13.price).toBe(99);
+    expect(u13.flat).toBe(true);
+    expect(discountApplies("u30", u13)).toBe(false);
+    expect(discountedPlanPrice(u13, ["u30", "samle", "u3035"])).toBe(99);
   });
 });
 
@@ -114,5 +123,40 @@ describe("Familie", () => {
   it("average is total divided by members", () => {
     const pool = getFamilyPool("f20");
     expect(familyAverage(3, pool, false)).toBe(Math.round(859 / 3));
+  });
+});
+
+describe("combinedTotals (Enkelt + Familie in one quote)", () => {
+  const lines: Line[] = [
+    { id: "1", planId: "ub_maks", discounts: ["u30"], addonIds: [] }, // 503
+    { id: "2", planId: "1gb_u13", discounts: [], addonIds: [] }, // 99 flat
+  ];
+  const families: FamilyConfig[] = [
+    { id: "f", members: 3, poolId: "f20", samlerabatt: true }, // (3*210+229)*.9 = 773
+  ];
+
+  it("sums lines and families into one monthly total", () => {
+    const t = combinedTotals(lines, families);
+    expect(t.monthly).toBe(503 + 99 + familyConfigTotal(families[0]));
+    expect(t.monthly).toBe(503 + 99 + 773);
+  });
+
+  it("counts units as one per line plus each family's members", () => {
+    const t = combinedTotals(lines, families);
+    expect(t.units).toBe(2 + 3); // 2 lines + 3 members
+    expect(t.averageMonthly).toBe(Math.round(t.monthly / 5));
+  });
+
+  it("savings include family samlerabatt and exclude flat U13", () => {
+    const t = combinedTotals(lines, families);
+    // base: 629 (maks) + 99 (u13 flat) + 859 (family no rabatt) = 1587
+    expect(t.baseMonthly).toBe(629 + 99 + 859);
+    expect(t.savingsMonthly).toBe(t.baseMonthly - t.monthly);
+  });
+
+  it("handles an empty quote", () => {
+    const t = combinedTotals([], []);
+    expect(t.monthly).toBe(0);
+    expect(t.averageMonthly).toBe(0);
   });
 });

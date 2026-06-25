@@ -29,6 +29,10 @@ export interface Plan {
   bonus: string;
   /** Base monthly price in kr before discounts. */
   price: number;
+  /** Flat-price plan with no discounts (e.g. the U13 child plan). */
+  flat?: boolean;
+  /** Short tag shown next to the name, e.g. "U13". */
+  tag?: string;
 }
 
 export const PLANS: Plan[] = [
@@ -39,6 +43,7 @@ export const PLANS: Plan[] = [
   { id: "30gb", name: "30 GB", gb: 30, bonus: "+10 GB", price: 449 },
   { id: "ub", name: "Ubegrenset", gb: 0, bonus: "", price: 529 },
   { id: "ub_maks", name: "Ubegrenset Maksimal", gb: -1, bonus: "", price: 629 },
+  { id: "1gb_u13", name: "1 GB", gb: 1, bonus: "", price: 99, flat: true, tag: "U13" },
 ];
 
 export interface Addon {
@@ -87,6 +92,7 @@ export function getPlan(planId: string): Plan {
 
 /** Whether a discount applies to a given plan (Samlerabatt 20% is excluded on Ubegrenset Maksimal). */
 export function discountApplies(discountId: DiscountId, plan: Plan): boolean {
+  if (plan.flat) return false;
   if (discountId === "samle20" && plan.gb === -1) return false;
   return true;
 }
@@ -179,6 +185,59 @@ export function familyTotal(members: number, pool: FamilyPool, samlerabatt: bool
 export function familyAverage(members: number, pool: FamilyPool, samlerabatt: boolean): number {
   if (members <= 0) return 0;
   return Math.round(familyTotal(members, pool, samlerabatt) / members);
+}
+
+/** A configured family block in a quote. */
+export interface FamilyConfig {
+  id: string;
+  members: number;
+  poolId: string;
+  samlerabatt: boolean;
+}
+
+export function familyConfigTotal(f: FamilyConfig): number {
+  return familyTotal(f.members, getFamilyPool(f.poolId), f.samlerabatt);
+}
+
+/** Family total at full price (without samlerabatt), for savings. */
+export function familyConfigBase(f: FamilyConfig): number {
+  return familyTotal(f.members, getFamilyPool(f.poolId), false);
+}
+
+// ---- Combined quote (Enkelt lines + Familie blocks) ----
+
+export interface CombinedTotals {
+  monthly: number;
+  yearly: number;
+  baseMonthly: number;
+  savingsMonthly: number;
+  savingsYearly: number;
+  /** Total subscriptions: one per Enkelt line plus each family's members. */
+  units: number;
+  averageMonthly: number;
+}
+
+export function combinedTotals(lines: Line[], families: FamilyConfig[]): CombinedTotals {
+  const linesMonthly = lines.reduce((sum, l) => sum + lineTotal(l), 0);
+  const familiesMonthly = families.reduce((sum, f) => sum + familyConfigTotal(f), 0);
+  const monthly = linesMonthly + familiesMonthly;
+
+  const linesBase = lines.reduce((sum, l) => sum + lineBaseTotal(l), 0);
+  const familiesBase = families.reduce((sum, f) => sum + familyConfigBase(f), 0);
+  const baseMonthly = linesBase + familiesBase;
+
+  const savingsMonthly = baseMonthly - monthly;
+  const units = lines.length + families.reduce((sum, f) => sum + f.members, 0);
+
+  return {
+    monthly,
+    yearly: monthly * 12,
+    baseMonthly,
+    savingsMonthly,
+    savingsYearly: savingsMonthly * 12,
+    units,
+    averageMonthly: units ? Math.round(monthly / units) : 0,
+  };
 }
 
 /** Norwegian price formatting, e.g. 1044 -> "1 044,-". */
