@@ -1,76 +1,182 @@
-// Single source of truth for the Talkmore field-sales calculator.
-// Mirrors the official tool at https://talkmore.kundeportal.no/ (see docs/official-pricing.md).
-// Prices and discount math are decoded from the official production bundle.
+// Single source of truth for the Talkmore field-sales calculator (v3).
+// Prices, discount tiers and the Familie model mirror the approved reference
+// build (see docs/official-pricing.md). Numbers are stored explicitly per tier
+// so they match the reference exactly — never derived from a percentage here.
 
-// When the prices below were last checked against the official calculator.
-// Bump this whenever you re-verify lib/pricing.ts against talkmore.kundeportal.no.
-export const PRICES_VERIFIED = "25.06.2026";
+// When the prices below were last checked against the official model.
+export const PRICES_VERIFIED = "26.06.2026";
 export const PRICES_SOURCE = "talkmore.kundeportal.no";
 
-export type DiscountId = "samle" | "u30" | "u3030" | "u3035" | "samle20";
+export type SubType = "enkelt" | "familie";
 
-export interface Discount {
-  id: DiscountId;
-  label: string;
-  factor: number;
-  note?: string;
-}
+// One radio group, three states. A plan only offers the tiers it lists in `priser`.
+export type DiscountId = "full" | "p20" | "p35";
 
-// Order matters: the official cart applies these multipliers in this exact sequence.
-export const DISCOUNTS: Discount[] = [
-  { id: "samle", label: "Samlerabatt 10%", factor: 0.9 },
-  { id: "u30", label: "U30 (20%)", factor: 0.8 },
-  { id: "u3030", label: "U30 (30%)", factor: 0.7 },
-  { id: "u3035", label: "U30 (35%)", factor: 0.65 },
-  { id: "samle20", label: "Samlerabatt 20%", factor: 0.8, note: "Ikke på Ubegrenset Maksimal" },
-];
-
-// The official tool uses ONE radio group for all discounts: a subscription gets
-// at most one discount (a U30 level OR a samlerabatt rate OR none). Selecting one
-// clears any other. This keeps prices identical to the official calculator.
-export function toggleDiscount(current: DiscountId[], id: DiscountId): DiscountId[] {
-  return current.includes(id) ? [] : [id];
-}
+export const DISCOUNT_LABEL: Record<DiscountId, string> = {
+  full: "Full pris",
+  p20: "−20 %",
+  p35: "−35 %",
+};
 
 export interface Plan {
   id: string;
-  name: string;
-  /** 0 = Ubegrenset, -1 = Ubegrenset Maksimal, otherwise the GB amount. */
-  gb: number;
-  /** Bonus data from the price sheet (informational, does not affect price). */
-  bonus: string;
-  /** Base monthly price in kr before discounts. */
-  price: number;
-  /** Flat-price plan with no discounts (e.g. the U13 child plan). */
-  flat?: boolean;
-  /** Short tag shown next to the name, e.g. "U13". */
-  tag?: string;
+  navn: string;
+  /** GB amount, or null for Ubegrenset. */
+  gb: number | null;
+  /** Bonus GB the rep can grant (0 = none, hides the extra-GB toggle). */
+  ekstra: number;
+  /** Whether "Første måned gratis" applies (Enkelt data plans only). */
+  fmf?: boolean;
+  /** Unlimited plan flag (informational). */
+  ub?: boolean;
+  /** Single-tier plan (U13): only full price, no discounts. */
+  single?: boolean;
+  /** Familie only: indicative price per person. */
+  perPers?: number;
+  /** Explicit price per discount tier. `full` is always present. */
+  priser: Partial<Record<DiscountId, number>> & { full: number };
 }
 
-export const PLANS: Plan[] = [
-  { id: "1gb", name: "1 GB", gb: 1, bonus: "+2 GB", price: 249 },
-  { id: "5gb", name: "5 GB", gb: 5, bonus: "+3 GB", price: 299 },
-  { id: "10gb", name: "10 GB", gb: 10, bonus: "+4 GB", price: 349 },
-  { id: "18gb", name: "18 GB", gb: 18, bonus: "+5 GB", price: 399 },
-  { id: "30gb", name: "30 GB", gb: 30, bonus: "+10 GB", price: 449 },
-  { id: "ub", name: "Ubegrenset", gb: 0, bonus: "", price: 529 },
-  { id: "ub_maks", name: "Ubegrenset Maksimal", gb: -1, bonus: "", price: 629 },
-  { id: "1gb_u13", name: "1 GB", gb: 1, bonus: "", price: 99, flat: true, tag: "U13" },
+export const ENKELT: Plan[] = [
+  { id: "e1", navn: "1 GB", gb: 1, ekstra: 2, fmf: true, priser: { full: 249, p20: 199, p35: 162 } },
+  { id: "e5", navn: "5 GB", gb: 5, ekstra: 3, fmf: true, priser: { full: 299, p20: 239, p35: 194 } },
+  { id: "e10", navn: "10 GB", gb: 10, ekstra: 4, fmf: true, priser: { full: 349, p20: 279, p35: 227 } },
+  { id: "e18", navn: "18 GB", gb: 18, ekstra: 5, fmf: true, priser: { full: 399, p20: 319, p35: 259 } },
+  { id: "e30", navn: "30 GB", gb: 30, ekstra: 10, fmf: true, priser: { full: 449, p20: 359, p35: 292 } },
+  { id: "ubn", navn: "UB Normal", gb: null, ekstra: 0, fmf: false, ub: true, priser: { full: 529, p20: 423, p35: 344 } },
+  { id: "ubm", navn: "UB Maksimal", gb: null, ekstra: 0, fmf: false, ub: true, priser: { full: 629, p20: 503, p35: 409 } },
+  { id: "u13", navn: "1 GB (U13)", gb: 1, ekstra: 0, fmf: true, single: true, priser: { full: 99 } },
+];
+
+export const FAMILIE: Plan[] = [
+  { id: "f5", navn: "5 GB", gb: 5, ekstra: 2, perPers: 215, priser: { full: 429, p20: 343 } },
+  { id: "f10", navn: "10 GB", gb: 10, ekstra: 4, perPers: 265, priser: { full: 529, p20: 423 } },
+  { id: "f20", navn: "20 GB", gb: 20, ekstra: 4, perPers: 325, priser: { full: 649, p20: 519 } },
+  { id: "f40", navn: "40 GB", gb: 40, ekstra: 5, perPers: 400, priser: { full: 799, p20: 639 } },
+  { id: "f80", navn: "80 GB", gb: 80, ekstra: 10, perPers: 450, priser: { full: 899, p20: 719 } },
+  { id: "fub", navn: "Ubegrenset", gb: null, ekstra: 0, ub: true, perPers: 525, priser: { full: 1049, p20: 839 } },
 ];
 
 export interface Addon {
   id: string;
-  name: string;
-  price: number;
+  navn: string;
+  pris: number;
 }
 
-// From the printed price sheet. Add-ons are not discounted.
-export const ADDONS: Addon[] = [
-  { id: "digital_trygghet", name: "Digital trygghet", price: 69 },
-  { id: "tvillingsim", name: "Tvillingsim", price: 79 },
-  { id: "datasim", name: "Datasim", price: 79 },
-  { id: "ringepakker", name: "Ringepakker", price: 99 },
+// Value-added services. Not discounted; free the first (porting) month.
+export const VAS: Addon[] = [
+  { id: "dt", navn: "Digital trygghet", pris: 69 },
+  { id: "tvil", navn: "Tvillingsim", pris: 79 },
+  { id: "data", navn: "Datasim", pris: 79 },
+  { id: "ring", navn: "Ringepakke", pris: 99 },
 ];
+
+export const MONTHS_NB = [
+  "januar", "februar", "mars", "april", "mai", "juni",
+  "juli", "august", "september", "oktober", "november", "desember",
+] as const;
+
+export function plansFor(type: SubType): Plan[] {
+  return type === "enkelt" ? ENKELT : FAMILIE;
+}
+
+export function getPlan(type: SubType, id: string): Plan {
+  const list = plansFor(type);
+  return list.find((p) => p.id === id) ?? list[0];
+}
+
+/** The discount that actually applies: falls back to full if the plan has no such tier. */
+export function effectiveDiscount(plan: Plan, disc: DiscountId): DiscountId {
+  return plan.priser[disc] !== undefined ? disc : "full";
+}
+
+/** Discounted plan price (no add-ons), using the explicit per-tier price. */
+export function planPrice(plan: Plan, disc: DiscountId): number {
+  return plan.priser[effectiveDiscount(plan, disc)] as number;
+}
+
+export function vasTotal(vasIds: string[]): number {
+  return VAS.reduce((sum, v) => sum + (vasIds.includes(v.id) ? v.pris : 0), 0);
+}
+
+/** Monthly total for one configured line: discounted plan + selected add-ons. */
+export function lineMonthly(plan: Plan, disc: DiscountId, vasIds: string[]): number {
+  return planPrice(plan, disc) + vasTotal(vasIds);
+}
+
+export function formatKr(value: number): string {
+  return Math.round(value).toLocaleString("nb-NO");
+}
+
+export function capitalize(s: string): string {
+  return s.charAt(0).toUpperCase() + s.slice(1);
+}
+
+// ---- First-invoice timing (porting), 30-day convention ----
+
+function parsePort(portIso: string): Date {
+  return new Date(`${portIso}T00:00:00`);
+}
+
+/** Days left in the porting month (30-day convention). */
+export function remainingDays(portIso: string): number {
+  const d = parsePort(portIso);
+  const day = Number.isNaN(d.getTime()) ? 1 : d.getDate();
+  return Math.max(0, 30 - day);
+}
+
+/** Month names for the next three invoices (sent the 1st of each following month). */
+export function invoiceLabels(portIso: string): [string, string, string] {
+  const d = parsePort(portIso);
+  const ref = Number.isNaN(d.getTime()) ? new Date() : d;
+  return [1, 2, 3].map((k) =>
+    capitalize(MONTHS_NB[new Date(ref.getFullYear(), ref.getMonth() + k, 1).getMonth()]),
+  ) as [string, string, string];
+}
+
+export function portMonthName(portIso: string): string {
+  const d = parsePort(portIso);
+  const ref = Number.isNaN(d.getTime()) ? new Date() : d;
+  return capitalize(MONTHS_NB[ref.getMonth()]);
+}
+
+// ---- Order / cart ----
+
+export interface OrderLine {
+  navn: string;
+  disc: DiscountId;
+  discLbl: string;
+  perPers: number | null;
+  ekstraGb: number;
+  vasNames: string[];
+  /** Discounted plan price only (add-ons free the first month). */
+  price: number;
+  fmf: boolean;
+  /** Recurring monthly total (plan + add-ons). */
+  monthly: number;
+}
+
+export interface OrderChart {
+  totMonthly: number;
+  rem: number;
+  subRem: number;
+  bars: [number, number, number];
+  labels: [string, string, string];
+}
+
+/** The three first-invoice bars for the whole order, given a porting date. */
+export function orderChart(order: OrderLine[], portIso: string): OrderChart {
+  const totMonthly = order.reduce((s, it) => s + it.monthly, 0);
+  const rem = remainingDays(portIso);
+  const subRem = order.reduce((s, it) => s + (it.fmf ? 0 : Math.round((it.price / 30) * rem)), 0);
+  return {
+    totMonthly,
+    rem,
+    subRem,
+    bars: [subRem + totMonthly, totMonthly, totMonthly],
+    labels: invoiceLabels(portIso),
+  };
+}
 
 export const BENEFITS: string[] = [
   "Ingen binding",
@@ -78,256 +184,13 @@ export const BENEFITS: string[] = [
   "Fri bruk i EU/EØS + UK",
   "Fri tale i Norden",
   "Data rollover",
-  "Data kontroll",
+  "Datakontroll",
   "Svindel- og nummervarsel",
   "Nettvern",
   "Nettslett",
-  "Fast rabatt *",
-  "5× Databoost *",
+  "Fast rabatt",
+  "5× Databoost",
   "1000,- rabatt på mobil",
-  "Trumf 4% bonus *",
-  "Norwegian reward 3%",
+  "Trumf 4 % bonus",
+  "Norwegian Reward 3 %",
 ];
-
-export interface Line {
-  id: string;
-  planId: string;
-  discounts: DiscountId[];
-  addonIds: string[];
-}
-
-export function getPlan(planId: string): Plan {
-  const plan = PLANS.find((p) => p.id === planId);
-  if (!plan) throw new Error(`Unknown plan: ${planId}`);
-  return plan;
-}
-
-/** Whether a discount applies to a given plan (Samlerabatt 20% is excluded on Ubegrenset Maksimal). */
-export function discountApplies(discountId: DiscountId, plan: Plan): boolean {
-  if (plan.flat) return false;
-  if (discountId === "samle20" && plan.gb === -1) return false;
-  return true;
-}
-
-export function addonsTotal(addonIds: string[]): number {
-  return addonIds.reduce((sum, id) => {
-    const addon = ADDONS.find((a) => a.id === id);
-    return sum + (addon?.price ?? 0);
-  }, 0);
-}
-
-// Money is kept PRECISE internally and rounded only at display (formatKr), so a
-// multi-line total matches the official cart exactly (it sums precise, then rounds).
-
-/** Plan price after all selected discounts, applied in the official order. Precise (unrounded). */
-export function discountedPlanPrice(plan: Plan, discounts: DiscountId[]): number {
-  let price = plan.price;
-  for (const d of DISCOUNTS) {
-    if (!discounts.includes(d.id)) continue;
-    if (!discountApplies(d.id, plan)) continue;
-    price *= d.factor;
-  }
-  return price;
-}
-
-/** Monthly total for a single line: discounted plan price + selected add-ons. */
-export function lineTotal(line: Line): number {
-  return discountedPlanPrice(getPlan(line.planId), line.discounts) + addonsTotal(line.addonIds);
-}
-
-/** Monthly total at full price (no discounts), add-ons unchanged. Used for savings. */
-export function lineBaseTotal(line: Line): number {
-  return getPlan(line.planId).price + addonsTotal(line.addonIds);
-}
-
-export interface QuoteTotals {
-  monthly: number;
-  yearly: number;
-  baseMonthly: number;
-  savingsMonthly: number;
-  savingsYearly: number;
-  averageMonthly: number;
-}
-
-export function quoteTotals(lines: Line[]): QuoteTotals {
-  const monthly = lines.reduce((sum, l) => sum + lineTotal(l), 0);
-  const baseMonthly = lines.reduce((sum, l) => sum + lineBaseTotal(l), 0);
-  const savingsMonthly = baseMonthly - monthly;
-  return {
-    monthly,
-    yearly: monthly * 12,
-    baseMonthly,
-    savingsMonthly,
-    savingsYearly: savingsMonthly * 12,
-    averageMonthly: lines.length ? monthly / lines.length : 0,
-  };
-}
-
-// ---- Familie (shared / family plan) ----
-
-export interface FamilyPool {
-  id: string;
-  name: string;
-  gb: number; // 0 = Ubegrenset
-  extraGb: number;
-  basis: number;
-}
-
-export const FAMILY_PER_MEMBER = 210;
-
-export const FAMILY_POOLS: FamilyPool[] = [
-  { id: "f5", name: "5 GB", gb: 5, extraGb: 2, basis: 9 },
-  { id: "f10", name: "10 GB", gb: 10, extraGb: 4, basis: 109 },
-  { id: "f20", name: "20 GB", gb: 20, extraGb: 4, basis: 229 },
-  { id: "f40", name: "40 GB", gb: 40, extraGb: 5, basis: 379 },
-  { id: "f80", name: "80 GB", gb: 80, extraGb: 10, basis: 479 },
-  { id: "fub", name: "Ubegrenset", gb: 0, extraGb: 0, basis: 629 },
-];
-
-export function getFamilyPool(poolId: string): FamilyPool {
-  const pool = FAMILY_POOLS.find((p) => p.id === poolId);
-  if (!pool) throw new Error(`Unknown family pool: ${poolId}`);
-  return pool;
-}
-
-/** Samlerabatt rate for a family. Field-confirmed at 20% (the decoded bundle showed 10%). */
-export const FAMILY_SAMLERABATT_FACTOR = 0.8;
-
-/** Family monthly total: members × 210 + pool basis, optionally with 20% samlerabatt. Precise. */
-export function familyTotal(members: number, pool: FamilyPool, samlerabatt: boolean): number {
-  const base = members * FAMILY_PER_MEMBER + pool.basis;
-  return samlerabatt ? base * FAMILY_SAMLERABATT_FACTOR : base;
-}
-
-/** Average price per member (Snittpris). Precise; round at display. */
-export function familyAverage(members: number, pool: FamilyPool, samlerabatt: boolean): number {
-  if (members <= 0) return 0;
-  return familyTotal(members, pool, samlerabatt) / members;
-}
-
-/** A configured family block in a quote. */
-export interface FamilyConfig {
-  id: string;
-  members: number;
-  poolId: string;
-  samlerabatt: boolean;
-}
-
-export function familyConfigTotal(f: FamilyConfig): number {
-  return familyTotal(f.members, getFamilyPool(f.poolId), f.samlerabatt);
-}
-
-/** Family total at full price (without samlerabatt), for savings. */
-export function familyConfigBase(f: FamilyConfig): number {
-  return familyTotal(f.members, getFamilyPool(f.poolId), false);
-}
-
-// ---- Combined quote (Enkelt lines + Familie blocks) ----
-
-export interface CombinedTotals {
-  monthly: number;
-  yearly: number;
-  baseMonthly: number;
-  savingsMonthly: number;
-  savingsYearly: number;
-  /** Total subscriptions: one per Enkelt line plus each family's members. */
-  units: number;
-  averageMonthly: number;
-}
-
-export function combinedTotals(lines: Line[], families: FamilyConfig[]): CombinedTotals {
-  const linesMonthly = lines.reduce((sum, l) => sum + lineTotal(l), 0);
-  const familiesMonthly = families.reduce((sum, f) => sum + familyConfigTotal(f), 0);
-  const monthly = linesMonthly + familiesMonthly;
-
-  const linesBase = lines.reduce((sum, l) => sum + lineBaseTotal(l), 0);
-  const familiesBase = families.reduce((sum, f) => sum + familyConfigBase(f), 0);
-  const baseMonthly = linesBase + familiesBase;
-
-  const savingsMonthly = baseMonthly - monthly;
-  const units = lines.length + families.reduce((sum, f) => sum + f.members, 0);
-
-  return {
-    monthly,
-    yearly: monthly * 12,
-    baseMonthly,
-    savingsMonthly,
-    savingsYearly: savingsMonthly * 12,
-    units,
-    averageMonthly: units ? monthly / units : 0,
-  };
-}
-
-/** Norwegian price formatting, e.g. 1044 -> "1 044,-". */
-export function formatKr(value: number): string {
-  return `${Math.round(value).toLocaleString("nb-NO")},-`;
-}
-
-// ---- First-invoice timing (porting) ----
-//
-// When a customer ports mid-month they pay for the remaining days of the porting
-// month PLUS the first whole month, both on the first invoice (sent the 1st of the
-// following month). We use the 30-day-month convention the sales team works with.
-// Value-added services and "Første måned gratis" are free during the porting month,
-// so the rest-days amount is computed on the PLAN price only — never the add-ons.
-
-export const MONTHS_NB = [
-  "januar", "februar", "mars", "april", "mai", "juni",
-  "juli", "august", "september", "oktober", "november", "desember",
-] as const;
-
-export function monthNameNb(date: Date): string {
-  const name = MONTHS_NB[date.getMonth()];
-  return name.charAt(0).toUpperCase() + name.slice(1);
-}
-
-export interface InvoiceSchedule {
-  /** Days left in the porting month under the 30-day convention. */
-  restDays: number;
-  /** Rest-days charge on the first invoice (0 if first month free or end-of-month). */
-  restAmount: number;
-  /** Recurring monthly total (plan + add-ons). */
-  monthly: number;
-  /** The first three invoice amounts: [restdays + month1, month2, month3]. */
-  bars: [number, number, number];
-  /** Month names for the three invoices (the invoice is sent the 1st of each). */
-  labels: [string, string, string];
-  /** The month the customer ports in (where the rest days fall). */
-  portMonth: string;
-}
-
-/**
- * First three invoices for a ported subscription. `planMonthly` is the discounted
- * plan price (no add-ons); `addonsMonthly` is added to the recurring total but is
- * free during the porting month. Precise internally — round at display.
- */
-export function invoiceSchedule(opts: {
-  planMonthly: number;
-  addonsMonthly: number;
-  portDate: Date | string;
-  firstMonthFree: boolean;
-}): InvoiceSchedule {
-  const { planMonthly, addonsMonthly, firstMonthFree } = opts;
-  const d = opts.portDate instanceof Date ? opts.portDate : new Date(`${opts.portDate}T00:00:00`);
-  const valid = !Number.isNaN(d.getTime());
-  const day = valid ? d.getDate() : 1;
-
-  const restDays = Math.max(0, 30 - day);
-  const restAmount = firstMonthFree ? 0 : Math.round((planMonthly / 30) * restDays);
-  const monthly = planMonthly + addonsMonthly;
-
-  // Invoice k (k = 1..3) is sent the 1st of the k-th month after the porting month.
-  const ref = valid ? d : new Date();
-  const labels = [1, 2, 3].map((k) =>
-    monthNameNb(new Date(ref.getFullYear(), ref.getMonth() + k, 1)),
-  ) as [string, string, string];
-
-  return {
-    restDays,
-    restAmount,
-    monthly,
-    bars: [restAmount + monthly, monthly, monthly],
-    labels,
-    portMonth: monthNameNb(ref),
-  };
-}

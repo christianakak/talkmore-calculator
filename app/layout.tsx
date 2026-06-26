@@ -30,7 +30,7 @@ export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
   viewportFit: "cover",
-  themeColor: "#f7f7f8",
+  themeColor: "#f6f8f6",
 };
 
 export default function RootLayout({
@@ -39,11 +39,8 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html
-      lang="no"
-      className={`${poppins.variable} ${questrial.variable} h-full antialiased`}
-    >
-      <body className="min-h-full flex flex-col relative">{children}</body>
+    <html lang="no" className={`${poppins.variable} ${questrial.variable}`}>
+      <body>{children}</body>
     </html>
   );
 }

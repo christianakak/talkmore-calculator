@@ -1,37 +1,41 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
-import InvoiceChart from "@/components/InvoiceChart";
-import Toggle from "@/components/Toggle";
+import { useEffect, useState } from "react";
 import {
-  ADDONS,
-  addonsTotal,
   type DiscountId,
-  discountApplies,
-  discountedPlanPrice,
+  DISCOUNT_LABEL,
+  effectiveDiscount,
   getPlan,
-  invoiceSchedule,
-  PLANS,
-  toggleDiscount,
+  type OrderLine,
+  orderChart,
+  planPrice,
+  plansFor,
+  portMonthName,
+  formatKr,
+  type SubType,
+  VAS,
+  vasTotal,
 } from "@/lib/pricing";
 
-const STORAGE_KEY = "tm-enkelt-v1";
+interface Cfg {
+  type: SubType;
+  prodId: string;
+  extra: boolean;
+  u30: boolean;
+  disc: DiscountId;
+  fmf: boolean;
+  vas: string[];
+}
 
-const DISCOUNT_SUFFIX: Record<DiscountId, string> = {
-  samle: " −10%",
-  u30: " −20%",
-  u3030: " −30%",
-  u3035: " −35%",
-  samle20: " −20%",
+const INITIAL: Cfg = {
+  type: "enkelt",
+  prodId: "e10",
+  extra: false,
+  u30: false,
+  disc: "full",
+  fmf: false,
+  vas: [],
 };
-
-const nf = (n: number) => Math.round(n).toLocaleString("nb-NO");
-const planIds = new Set(PLANS.map((p) => p.id));
-
-const labelCls =
-  "block text-[11px] font-semibold uppercase tracking-[0.1em] text-muted mt-4 mb-[7px]";
-const fieldCls =
-  "w-full rounded-[12px] border border-line bg-white px-3 py-[11px] text-[15px] font-semibold text-ink";
 
 function todayIso(): string {
   const d = new Date();
@@ -40,264 +44,385 @@ function todayIso(): string {
   ).padStart(2, "0")}`;
 }
 
-interface EnkeltState {
-  planId: string;
-  extra: boolean;
-  portDate: string;
-  discounts: DiscountId[];
-  firstMonthFree: boolean;
-  addonIds: string[];
-}
-
-const initialState: EnkeltState = {
-  planId: "10gb",
-  extra: false,
-  portDate: "",
-  discounts: [],
-  firstMonthFree: false,
-  addonIds: [],
-};
+const LockIcon = () => (
+  <svg width="15" height="15" viewBox="0 0 24 24" fill="none">
+    <rect x="4" y="10" width="16" height="10" rx="2" stroke="currentColor" strokeWidth="2" />
+    <path d="M8 10V7a4 4 0 018 0v3" stroke="currentColor" strokeWidth="2" />
+  </svg>
+);
 
 export default function Calculator() {
-  const [st, setSt] = useState<EnkeltState>(initialState);
-  const loaded = useRef(false);
+  const [cfg, setCfg] = useState<Cfg>(INITIAL);
+  const [order, setOrder] = useState<OrderLine[]>([]);
+  const [port, setPort] = useState("");
 
-  // Hydration-safe load: read storage / default the porting date to today after mount.
+  // Default the porting date to today after mount (hydration-safe: keeps new Date()
+  // out of the server render so there is no hydration mismatch).
   useEffect(() => {
-    let next = initialState;
-    try {
-      const raw = localStorage.getItem(STORAGE_KEY);
-      if (raw) {
-        const d = JSON.parse(raw) as Partial<EnkeltState>;
-        if (d && typeof d.planId === "string" && planIds.has(d.planId)) {
-          next = { ...initialState, ...d };
-        }
-      }
-    } catch {
-      // ignore corrupt storage
-    }
-    if (!next.portDate) next = { ...next, portDate: todayIso() };
-    // eslint-disable-next-line react-hooks/set-state-in-effect -- hydration-safe initial load
-    setSt(next);
-    loaded.current = true;
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- intentional post-mount default
+    setPort(todayIso());
   }, []);
 
-  useEffect(() => {
-    if (!loaded.current) return;
-    try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(st));
-    } catch {
-      // storage full / unavailable: non-fatal
-    }
-  }, [st]);
+  const list = plansFor(cfg.type);
+  const prod = getPlan(cfg.type, cfg.prodId);
+  const familie = cfg.type === "familie";
+  const single = !!prod.single;
 
-  const plan = getPlan(st.planId);
-  const isUnlimited = plan.gb === 0 || plan.gb === -1;
-  const bonusGb = plan.bonus ? parseInt(plan.bonus.replace(/[^0-9]/g, ""), 10) || 0 : 0;
-  const totalGb = (plan.gb > 0 ? plan.gb : 0) + (st.extra ? bonusGb : 0);
-  const fmfAvailable = !isUnlimited;
+  // Effective discount for display + price, coerced for plan/u30/familie constraints
+  // without mutating state during render.
+  let curDisc: DiscountId = cfg.disc;
+  if (familie && curDisc === "p35") curDisc = "p20";
+  if (single && curDisc !== "full") curDisc = "full";
+  if (curDisc === "p35" && !cfg.u30) curDisc = "p20";
+  curDisc = effectiveDiscount(prod, curDisc);
 
-  function patch(p: Partial<EnkeltState>) {
-    setSt((prev) => ({ ...prev, ...p }));
+  const price = planPrice(prod, curDisc);
+  const full = prod.priser.full;
+  const monthly = price + vasTotal(cfg.vas);
+  const fmfOn = cfg.fmf && !familie && !!prod.fmf;
+  const fullName = (familie ? "Familie " : "") + prod.navn;
+
+  function patch(p: Partial<Cfg>) {
+    setCfg((prev) => ({ ...prev, ...p }));
   }
 
+  function changeType(type: SubType) {
+    patch({ type, prodId: plansFor(type)[0].id, extra: false, fmf: false, disc: "full", u30: false });
+  }
   function changePlan(id: string) {
-    const p = getPlan(id);
-    const valid = st.discounts.filter((d) => discountApplies(d, p));
-    patch({
-      planId: id,
-      extra: false,
-      discounts: p.flat ? [] : valid,
-      firstMonthFree: p.gb === 0 || p.gb === -1 ? false : st.firstMonthFree,
-    });
+    patch({ prodId: id, extra: false, fmf: false });
+  }
+  function toggleU30() {
+    const u30 = !cfg.u30;
+    patch({ u30, disc: !u30 && cfg.disc === "p35" ? "p20" : cfg.disc });
+  }
+  function toggleVas(id: string) {
+    patch({ vas: cfg.vas.includes(id) ? cfg.vas.filter((v) => v !== id) : [...cfg.vas, id] });
   }
 
-  function pickDiscount(id: DiscountId | "full") {
-    if (id === "full") patch({ discounts: [] });
-    else patch({ discounts: toggleDiscount(st.discounts, id) });
+  function addToOrder() {
+    const vasNames = VAS.filter((v) => cfg.vas.includes(v.id)).map((v) => v.navn);
+    setOrder((prev) => [
+      ...prev,
+      {
+        navn: fullName,
+        disc: curDisc,
+        discLbl: DISCOUNT_LABEL[curDisc],
+        perPers: familie ? (prod.perPers ?? null) : null,
+        ekstraGb: cfg.extra && prod.ekstra > 0 ? prod.ekstra : 0,
+        vasNames,
+        price,
+        fmf: fmfOn,
+        monthly,
+      },
+    ]);
   }
 
-  function toggleAddon(id: string) {
-    patch({
-      addonIds: st.addonIds.includes(id)
-        ? st.addonIds.filter((a) => a !== id)
-        : [...st.addonIds, id],
-    });
+  function metaOf(it: OrderLine): string {
+    const bits: string[] = [];
+    if (it.disc !== "full") bits.push(it.discLbl);
+    if (it.ekstraGb > 0) bits.push(`+${it.ekstraGb} GB`);
+    if (it.fmf) bits.push("1. mnd gratis");
+    it.vasNames.forEach((n) => bits.push(n));
+    return bits.join(" · ");
   }
 
-  const planPrice = discountedPlanPrice(plan, st.discounts);
-  const addons = addonsTotal(st.addonIds);
-  const monthly = planPrice + addons;
-  const saved = plan.price - planPrice;
-
-  const selected = st.discounts[0];
-  const mix =
-    `${plan.name}${selected ? DISCOUNT_SUFFIX[selected] : ""} (${nf(planPrice)} kr)` +
-    ADDONS.filter((a) => st.addonIds.includes(a.id))
-      .map((a) => `  +  ${a.name} (${a.price} kr)`)
-      .join("");
-
-  // Computed only once a real porting date is set (the mount effect defaults it to
-  // today). This keeps new Date() out of the render path and avoids hydration drift.
-  const schedule = st.portDate
-    ? invoiceSchedule({
-        planMonthly: planPrice,
-        addonsMonthly: addons,
-        portDate: st.portDate,
-        firstMonthFree: st.firstMonthFree,
-      })
-    : null;
-
-  // One flat radio row, matching the official tool's RABATT order.
-  const chips: { id: DiscountId | "full"; label: string }[] = [
-    { id: "full", label: "Ingen rabatt" },
-    { id: "u30", label: "U30 20%" },
-    { id: "u3030", label: "U30 30%" },
-    { id: "u3035", label: "U30 35%" },
-    { id: "samle", label: "10% rabatt" },
-    { id: "samle20", label: "20% rabatt" },
+  const discDefs: { k: DiscountId; label: string }[] = [
+    { k: "full", label: "Full pris" },
+    { k: "p20", label: "−20 %" },
+    { k: "p35", label: "−35 %" },
   ];
 
+  const hasOrder = order.length > 0;
+  const chart = orderChart(order, port);
+  const maxBar = Math.max(...chart.bars, 0);
+
   return (
-    <div>
-      {/* Plan */}
-      <label className={labelCls} htmlFor="planSel">
-        Abonnement
-      </label>
-      <select
-        id="planSel"
-        className={fieldCls}
-        value={st.planId}
-        onChange={(e) => changePlan(e.target.value)}
-      >
-        {PLANS.map((p) => {
-          const gb = p.gb === 0 || p.gb === -1 ? "Ubegrenset" : `${p.gb} GB`;
-          return (
-            <option key={p.id} value={p.id}>
-              {p.name}
-              {p.tag ? ` (${p.tag})` : ""} · {nf(p.price)} kr/mnd · {gb}
-            </option>
-          );
-        })}
-      </select>
-      <div className="mt-2 inline-block rounded-full border border-line bg-paper-2 px-3.5 py-[5px] text-[13px] font-semibold text-ink-soft">
-        {isUnlimited ? "Ubegrenset data" : `${totalGb} GB${st.extra ? ` (inkl. +${bonusGb} GB)` : ""}`}
-      </div>
+    <div className="wrap">
+      <div className="tmlogo">TALKMORE</div>
+      <h1>Priskalkulator</h1>
 
-      {/* Extra GB (informational) */}
-      {!isUnlimited && bonusGb > 0 && (
-        <>
-          <label className={labelCls} htmlFor="extraSel">
-            Ekstra GB
-          </label>
-          <select
-            id="extraSel"
-            className={fieldCls}
-            value={st.extra ? "1" : "0"}
-            onChange={(e) => patch({ extra: e.target.value === "1" })}
-          >
-            <option value="0">Ingen ekstra · {plan.gb} GB</option>
-            <option value="1">
-              +{bonusGb} GB · {plan.gb + bonusGb} GB totalt
-            </option>
-          </select>
-        </>
-      )}
-
-      {/* Porting date */}
-      <label className={labelCls} htmlFor="portDate">
-        Porteringsdato
-      </label>
-      <input
-        id="portDate"
-        type="date"
-        className={fieldCls}
-        value={st.portDate}
-        onChange={(e) => patch({ portDate: e.target.value })}
-      />
-
-      {/* Discounts */}
-      {!plan.flat && (
-        <>
-          <label className={labelCls}>Rabatt</label>
-          <div className="grid grid-cols-3 gap-2">
-            {chips.map((c) => {
-              const price = c.id === "full" ? plan.price : discountedPlanPrice(plan, [c.id]);
-              const sel = c.id === "full" ? st.discounts.length === 0 : st.discounts.includes(c.id);
-              const disabled = c.id === "full" ? false : !discountApplies(c.id, plan);
-              return (
+      <div className="layout">
+        {/* ====== KONFIGURATOR ====== */}
+        <div className="col-main">
+          <div className="card">
+            <div className="seg">
+              {(["enkelt", "familie"] as SubType[]).map((t) => (
                 <button
-                  key={c.id}
+                  key={t}
                   type="button"
-                  disabled={disabled}
-                  onClick={() => pickDiscount(c.id)}
-                  className={`relative rounded-[12px] border px-1 py-2.5 text-center text-[13px] font-semibold leading-tight transition ${
-                    sel ? "border-teal bg-teal-bg text-teal-d" : "border-line bg-white text-muted"
-                  } ${disabled ? "cursor-not-allowed opacity-40" : ""}`}
+                  className={cfg.type === t ? "on" : ""}
+                  onClick={() => changeType(t)}
                 >
-                  {c.label}
-                  <span
-                    className={`mt-[3px] block text-[15px] font-bold tnum ${
-                      sel ? "text-teal-d" : "text-ink"
-                    }`}
-                  >
-                    {nf(price)} kr
-                  </span>
+                  {t === "enkelt" ? "Enkeltabonnement" : "Familieabonnement"}
                 </button>
+              ))}
+            </div>
+
+            <label className="flabel">Abonnement</label>
+            <div className="grid">
+              {list.map((p) => {
+                const sub =
+                  familie && p.perPers != null ? `Per pers ${formatKr(p.perPers)},-` : "kr/mnd";
+                return (
+                  <button
+                    key={p.id}
+                    type="button"
+                    className={`psq${p.id === cfg.prodId ? " on" : ""}`}
+                    onClick={() => changePlan(p.id)}
+                  >
+                    <span className="sg">{p.navn}</span>
+                    <span className="sp">{formatKr(p.priser.full)},-</span>
+                    <span className="ss">{sub}</span>
+                  </button>
+                );
+              })}
+            </div>
+
+            {prod.ekstra > 0 && (
+              <div id="extraWrap">
+                <div
+                  className={`tog${cfg.extra ? " on" : ""}`}
+                  role="switch"
+                  aria-checked={cfg.extra}
+                  onClick={() => patch({ extra: !cfg.extra })}
+                >
+                  <span>
+                    Gi ekstra GB <span className="tp">+{prod.ekstra} GB</span>
+                  </span>
+                  <span className="sw" />
+                </div>
+              </div>
+            )}
+
+            <div>
+              <label className="flabel">Rabatt</label>
+              {!familie && (
+                <div
+                  className={`tog${cfg.u30 ? " on" : ""}`}
+                  role="switch"
+                  aria-checked={cfg.u30}
+                  onClick={toggleU30}
+                >
+                  <span>
+                    Kunde under 30 år <span className="tp">låser opp 35 %</span>
+                  </span>
+                  <span className="sw" />
+                </div>
+              )}
+              <div className="disc">
+                {discDefs
+                  .filter((d) => !(familie && d.k === "p35"))
+                  .map((d) => {
+                    const tierPrice = prod.priser[d.k];
+                    const disabled = (single && d.k !== "full") || (d.k === "p35" && !cfg.u30);
+                    const showScar = (d.k === "p20" || d.k === "p35") && !disabled && !single;
+                    return (
+                      <button
+                        key={d.k}
+                        type="button"
+                        disabled={disabled}
+                        className={curDisc === d.k ? "on" : ""}
+                        onClick={() => patch({ disc: d.k })}
+                      >
+                        {showScar && <span className="scar">Få igjen</span>}
+                        {d.label}
+                        <span className="dk">{tierPrice !== undefined ? `${formatKr(tierPrice)} kr` : "–"}</span>
+                      </button>
+                    );
+                  })}
+              </div>
+              <div className="permanent">
+                <LockIcon />
+                <span>
+                  <b>Fast rabatt.</b> Kunden beholder rabatten så lenge abonnementet er aktivt hos
+                  Talkmore.
+                </span>
+              </div>
+            </div>
+
+            {!familie && prod.fmf && (
+              <div id="fmfWrap">
+                <label className="flabel">Kampanje</label>
+                <div
+                  className={`tog${fmfOn ? " on" : ""}`}
+                  role="switch"
+                  aria-checked={fmfOn}
+                  onClick={() => patch({ fmf: !cfg.fmf })}
+                >
+                  <span>
+                    Første måned gratis <span className="tp">restdager i porteringsmåneden</span>
+                  </span>
+                  <span className="sw" />
+                </div>
+              </div>
+            )}
+
+            <label className="flabel">
+              Tilleggstjenester <span className="hint">· 1. måned gratis</span>
+            </label>
+            <div className="vasgrid">
+              {VAS.map((v) => (
+                <div
+                  key={v.id}
+                  className={`tog${cfg.vas.includes(v.id) ? " on" : ""}`}
+                  role="switch"
+                  aria-checked={cfg.vas.includes(v.id)}
+                  onClick={() => toggleVas(v.id)}
+                >
+                  <span>
+                    {v.navn} <span className="tp">+{v.pris} kr</span>
+                  </span>
+                  <span className="sw" />
+                </div>
+              ))}
+            </div>
+
+            <label className="flabel" htmlFor="portDate">
+              Porteringsdato <span className="hint">· gjelder hele ordren</span>
+            </label>
+            <input
+              type="date"
+              id="portDate"
+              value={port}
+              onChange={(e) => setPort(e.target.value)}
+            />
+
+            <div className="linesum">
+              <div className="ls-l">
+                <div className="ls-name">
+                  {fullName}
+                  {curDisc !== "full" ? ` · ${DISCOUNT_LABEL[curDisc]}` : ""}
+                </div>
+                {curDisc !== "full" && (
+                  <div className="ls-save">Sparer {formatKr(full - price)} kr/mnd</div>
+                )}
+              </div>
+              <div className="ls-val">{formatKr(monthly)} kr/mnd</div>
+            </div>
+            <button type="button" className="addbtn" onClick={addToOrder}>
+              Legg til i ordre
+            </button>
+          </div>
+        </div>
+
+        {/* ====== ORDRE ====== */}
+        <div className="col-side">
+          <div className="card">
+            <div className="ohead">
+              <h2>Ordre</h2>
+              {hasOrder && (
+                <button type="button" className="clear" onClick={() => setOrder([])}>
+                  Tøm ordre
+                </button>
+              )}
+            </div>
+
+            {!hasOrder && <div className="empty">Ingen produkter lagt til ennå.</div>}
+            {order.map((it, i) => {
+              const meta = metaOf(it);
+              return (
+                <div className="oitem" key={i}>
+                  <div className="oinfo">
+                    <div className="oname">{it.navn}</div>
+                    {meta && <div className="ometa">{meta}</div>}
+                  </div>
+                  <div className="oprice">{formatKr(it.monthly)} kr</div>
+                  <button
+                    type="button"
+                    className="orm"
+                    aria-label="Fjern"
+                    onClick={() => setOrder((prev) => prev.filter((_, j) => j !== i))}
+                  >
+                    ×
+                  </button>
+                </div>
               );
             })}
+
+            {hasOrder && (
+              <div>
+                <div className="ototal">
+                  <span className="tl">Fast månedspris totalt</span>
+                  <span className="tv">
+                    {formatKr(chart.totMonthly)} <small>kr/mnd</small>
+                  </span>
+                </div>
+                <div className="chartwrap">
+                  <div className="clbl">Kundens første 3 fakturaer</div>
+                  <div className="chart">
+                    {chart.bars.map((val, i) => {
+                      const first = i === 0;
+                      const h = maxBar ? Math.max(8, Math.round((val / maxBar) * 150)) : 8;
+                      return (
+                        <div className="col" key={i}>
+                          {first && chart.subRem > 0 && (
+                            <div className="delta">+{formatKr(chart.subRem)} kr</div>
+                          )}
+                          <div className="cv">{formatKr(val)}</div>
+                          <div className={`bar${first ? " first" : ""}`} style={{ height: `${h}px` }}>
+                            {first && <div className="ftag">1. FAKTURA</div>}
+                          </div>
+                          <div className="cm">
+                            {chart.labels[i]}
+                            <small>{first ? "restdager + 1 mnd" : "fast pris"}</small>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                  <div className="breakdown">
+                    {chart.subRem > 0 ? (
+                      <>
+                        <b>1. faktura ({chart.labels[0]}):</b> {chart.rem} restdager i{" "}
+                        {portMonthName(port)} ({formatKr(chart.subRem)} kr) + {chart.labels[0]} (
+                        {formatKr(chart.totMonthly)} kr) = <b>{formatKr(chart.bars[0])} kr</b>.
+                      </>
+                    ) : (
+                      <>
+                        Ingen restdager å betale i {portMonthName(port)} — kunden betaler{" "}
+                        {formatKr(chart.totMonthly)} kr fra {chart.labels[0]}.
+                      </>
+                    )}
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
-        </>
-      )}
-
-      {/* Campaign */}
-      {fmfAvailable && (
-        <>
-          <label className={labelCls}>Kampanje</label>
-          <Toggle
-            label="Første måned gratis"
-            hint="restdager i porteringsmåneden"
-            checked={st.firstMonthFree}
-            onChange={() => patch({ firstMonthFree: !st.firstMonthFree })}
-          />
-        </>
-      )}
-
-      {/* VAS */}
-      <label className={labelCls}>
-        Tilleggstjenester (VAS){" "}
-        <span className="font-normal normal-case tracking-normal text-muted">· 1. mnd gratis</span>
-      </label>
-      <div className="grid gap-2 sm:grid-cols-2">
-        {ADDONS.map((a) => (
-          <Toggle
-            key={a.id}
-            label={a.name}
-            hint={`+${a.price} kr`}
-            checked={st.addonIds.includes(a.id)}
-            onChange={() => toggleAddon(a.id)}
-          />
-        ))}
+        </div>
       </div>
 
-      {/* Hero */}
-      <div className="mt-6 rounded-[16px] border border-line border-t-2 border-t-accent bg-card px-5 py-5 text-center shadow-[var(--shadow)]">
-        <div className="text-[11px] font-semibold uppercase tracking-[0.2em] text-muted">
-          Fast månedspris
+      {/* ====== FORKLARING ====== */}
+      <details>
+        <summary>
+          Hvorfor er første faktura høyere? <span className="chev">▼</span>
+        </summary>
+        <div className="dbody">
+          <p>
+            Kunden betaler for <b>restdagene i inneværende måned</b> i tillegg til den første hele
+            måneden — alt på den <b>første fakturaen</b>, som sendes den <b>1. i påfølgende måned</b>.
+            Derfor er første faktura alltid høyere enn den faste prisen.
+          </p>
+          <div className="example">
+            <ul>
+              <li>
+                Porteringsdato <b>20. juni</b>, månedspris <b>349 kr</b>.
+              </li>
+              <li>
+                349 / 30 = <b>11,63 kr/dag</b>. 10 dager igjen i juni = <b>116 kr</b>.
+              </li>
+              <li>
+                <b>1. faktura (1. juli):</b> 116 + 349 = <b>465 kr</b>.
+              </li>
+              <li>August og september: 349 kr som normalt.</li>
+            </ul>
+          </div>
+          <div className="note">
+            Tilleggstjenester og «Første måned gratis» dekker nettopp disse restdagene — gratis i
+            porteringsmåneden, full pris fra første hele måned.
+          </div>
         </div>
-        <div className="mt-1 font-display text-[46px] leading-[1.02] text-ink tnum">
-          {nf(monthly)}{" "}
-          <small className="font-sans text-[18px] font-semibold text-muted">kr/mnd</small>
-        </div>
-        <div className="mt-1.5 text-[12.5px] text-ink-soft">{mix}</div>
-        {saved >= 1 && (
-          <span className="mt-3 inline-block rounded-full bg-accent-dim px-3 py-[4px] text-[12px] font-bold text-accent">
-            Sparer {nf(saved)} kr/mnd vs. full pris
-          </span>
-        )}
-      </div>
-
-      {schedule && <InvoiceChart schedule={schedule} firstMonthFree={st.firstMonthFree} />}
+      </details>
     </div>
   );
 }

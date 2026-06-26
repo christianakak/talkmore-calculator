@@ -1,81 +1,63 @@
-# Official Talkmore pricing model
+# Talkmore pricing model (v3)
 
-Source: the official Talkmore price calculator at https://talkmore.kundeportal.no/
-(a Vite SPA built by FIKO AS, embedded into their order system via `postMessage`).
-Decoded from the production JS bundle `assets/index-CW5njFwb.js` on 2026-06-25.
-This is the authoritative model. Keep `lib/pricing.ts` in sync with it.
+Source of truth: the **approved reference build** supplied by management
+(`priskalkulator (1).html`, June 2026). `lib/pricing.ts` mirrors its numbers
+exactly. Prices are stored explicitly per tier, never derived from a percentage.
 
-## Enkelt (single subscription) base prices
+> ⚠️ This model intentionally differs from the older decode of the live tool at
+> https://talkmore.kundeportal.no/ (see git history of this file). Management
+> asked us to match the reference build exactly. If the live tool is the eventual
+> arbiter, re-verify these numbers there before a wide rollout.
 
-| Plan | Base kr/mnd | bundle `gb` value |
-|------|------:|------|
-| 1 GB | 249 | 1 |
-| 5 GB | 299 | 5 |
-| 10 GB | 349 | 10 |
-| 18 GB | 399 | 18 |
-| 30 GB | 449 | 30 |
-| Ubegrenset | 529 | 0 |
-| Ubegrenset Maksimal | 629 | -1 |
+## Discounts: one radio group, three states
 
-## Discounts (stackable toggles, not exclusive tiers)
+`full` · `−20 %` (`p20`) · `−35 %` (`p35`). A plan only offers the tiers listed
+in its `priser`. `−35 %` is gated behind the "Kunde under 30 år" toggle.
+The 10 % and 30 % tiers from the old model are gone.
 
-The running total applies these multipliers in order:
+## Enkelt (single subscription)
 
-```
-price
-  × 0.90  if Samlerabatt (10% rabatt)      flag: samle
-  × 0.80  if U30 (20%)                      flag: u30
-  × 0.70  if U30 (30%)                      flag: u3030
-  × 0.65  if U30 (35%)                      flag: u3035
-  × 0.80  if Samlerabatt 20% (20% rabatt)   flag: samle20  (NOT on Ubegrenset Maksimal, gb === -1)
-```
+| Plan | full | −20 % | −35 % | extra GB | FMF |
+|------|----:|----:|----:|----:|:--:|
+| 1 GB | 249 | 199 | 162 | +2 | yes |
+| 5 GB | 299 | 239 | 194 | +3 | yes |
+| 10 GB | 349 | 279 | 227 | +4 | yes |
+| 18 GB | 399 | 319 | 259 | +5 | yes |
+| 30 GB | 449 | 359 | 292 | +10 | yes |
+| UB Normal | 529 | 423 | 344 | – | no |
+| UB Maksimal | 629 | 503 | 409 | – | no |
+| 1 GB (U13) | 99 | – | – | – | yes |
 
-Source (cart total, verbatim from bundle):
+- `−20 %` now **does** apply to UB Maksimal (it was excluded in the old model).
+- U13 is a single flat tier: no discounts.
 
-```js
-r.forEach(b => {
-  const $ = b.samle   ? b.price * .9 : b.price,
-        E = b.u30     ? $ * .8       : $,
-        F = b.u3030   ? E * .7       : E,
-        A = b.u3035   ? F * .65      : F,
-        T = b.samle20 ? A * .8       : A;
-  m += T;
-});
-```
+## Familie (fixed tiers, full / −20 % only)
 
-Notes:
-- `U30 (20%)`, `U30 (30%)`, `U30 (35%)` are the three under-30 levels. In practice one is chosen.
-- Samlerabatt (10% or 20%) is a separate axis (bundle discount) and can stack on a U30 level.
-- The paper sheet's "Under 30 / 20%" and "Under 30 / 35%" rows == U30 (20%) and U30 (35%).
-  The sheet omitted the 30% level and the samlerabatt axis.
+No member counter and no per-member math anymore: each tier is a fixed total with
+an indicative per-person figure. Familie offers only `full` and `−20 %`
+(no U30, no `−35 %`).
 
-## Familie (family / shared plan)
+| Pool | full | −20 % | per person | extra GB |
+|------|----:|----:|----:|----:|
+| 5 GB | 429 | 343 | 215 | +2 |
+| 10 GB | 529 | 423 | 265 | +4 |
+| 20 GB | 649 | 519 | 325 | +4 |
+| 40 GB | 799 | 639 | 400 | +5 |
+| 80 GB | 899 | 719 | 450 | +10 |
+| Ubegrenset | 1049 | 839 | 525 | – |
 
-```
-total = (members * 210) + basis        // members >= 2
-total = total * 0.8                     // if samlerabatt
-```
+## Add-ons (VAS), not discounted, free the first month
 
-> Note: the decoded production bundle applied `* 0.9` (10%) for the family samlerabatt,
-> but field/sales use confirms it is **20% (`* 0.8`)**. `lib/pricing.ts` follows the 20% rate.
+Digital trygghet 69 · Tvillingsim 79 · Datasim 79 · Ringepakke 99.
 
-| Shared pool | Extra GB | basis |
-|------|------:|------:|
-| 5 GB | +2 | 9 |
-| 10 GB | +4 | 109 |
-| 20 GB | +4 | 229 |
-| 40 GB | +5 | 379 |
-| 80 GB | +10 | 479 |
-| Ubegrenset | – | 629 |
+## First invoice (porting), 30-day convention
 
-Example: family of 3 on the 20 GB pool = 3*210 + 229 = 859 kr/mnd (687 with 20% samlerabatt).
+Rest days = `max(0, 30 − portingDay)`. Rest-days charge is computed on the
+**plan price only** (add-ons and "Første måned gratis" are free that month) and
+billed on the first invoice on top of the first whole month. Applies to the whole
+order.
 
-## UI labels seen in the official tool
-Enkelt · Familie · Enkeltabonnement · Ubegrenset · Ubegrenset Maksimal · Ekstra GB ·
-Ingen rabatt · 10% rabatt · 20% rabatt · U30 (20%) · U30 (30%) · U30 (35%) ·
-Antall medlemmer · Valgte produkter · Totalpris · Snittpris · Legg til i bestilling · Nullstill.
+## Order / cart
 
-## Integration note
-The official tool posts the built order to its parent window:
-`postMessage({ type: "talkmoreOrderCalculatorEnk" | "talkmoreOrderCalculatorFam", message })`.
-Relevant if we ever embed our calculator into the same order system.
+Each configured line is added to an order; the chart and totals are computed
+across all lines. The porting date applies to the whole order.
