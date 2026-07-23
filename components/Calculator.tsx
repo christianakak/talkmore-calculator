@@ -30,6 +30,9 @@ const VAS_STEPPER = new Set(["data", "ring", "tvil"]);
 interface Cfg {
   type: SubType;
   prodId: string;
+  /** Where the plan was selected: the ABONNEMENT grid or a campaign square.
+      Controls which card is highlighted and how the order line is named. */
+  via: "grid" | "camp";
   u30: boolean;
   disc: DiscountId;
   fmf: boolean;
@@ -42,6 +45,7 @@ interface Cfg {
 const INITIAL: Cfg = {
   type: "enkelt",
   prodId: "e10",
+  via: "grid",
   u30: false,
   disc: "full",
   fmf: false,
@@ -109,7 +113,11 @@ export default function Calculator() {
   const price = planTotal(prod, curDisc);
   const monthly = price + vasTotal(cfg.vas);
   const fmfOn = cfg.fmf && !familie && !!prod.fmf;
-  const fullName = familie ? `Familie ${prod.navn} · ${cfg.persons} pers` : prod.navn;
+  // Sold via a campaign square -> the order line carries the campaign GB total
+  // (what the rep clicked and the customer saw), otherwise the base plan name.
+  const dispNavn =
+    cfg.via === "camp" && prod.ekstra > 0 ? `${(prod.gb ?? 0) + prod.ekstra} GB` : prod.navn;
+  const fullName = familie ? `Familie ${dispNavn} · ${cfg.persons} pers` : dispNavn;
 
   // Plans that receive bonus GB from the running campaign (informational only).
   const ekstraPlans = list.filter((p) => p.ekstra > 0);
@@ -124,6 +132,7 @@ export default function Calculator() {
     patch({
       type,
       prodId: plansFor(type)[0].id,
+      via: "grid",
       fmf: false,
       disc: "full",
       u30: false,
@@ -131,8 +140,8 @@ export default function Calculator() {
       vas: {},
     });
   }
-  function changePlan(id: string) {
-    patch({ prodId: id, fmf: false, persons: 2 });
+  function changePlan(id: string, via: "grid" | "camp" = "grid") {
+    patch({ prodId: id, via, fmf: false, persons: 2 });
   }
   function toggleU30() {
     const u30 = !cfg.u30;
@@ -223,7 +232,7 @@ export default function Calculator() {
                   <button
                     key={p.id}
                     type="button"
-                    className={`psq${p.id === cfg.prodId ? " on" : ""}`}
+                    className={`psq${p.id === cfg.prodId && cfg.via === "grid" ? " on" : ""}`}
                     onClick={() => changePlan(p.id)}
                   >
                     <span className="sg">{p.navn}</span>
@@ -276,7 +285,14 @@ export default function Calculator() {
                   {ekstraPlans.map((p) => {
                     const sqPrice = planTotal(p, dispDiscFor(p));
                     return (
-                      <div className="gbsq" key={p.id}>
+                      /* Selects the plan just like the ABONNEMENT grid, so the rep
+                         can add the campaign product straight to the order. */
+                      <button
+                        type="button"
+                        className={`gbsq${p.id === cfg.prodId && cfg.via === "camp" ? " on" : ""}`}
+                        key={p.id}
+                        onClick={() => changePlan(p.id, "camp")}
+                      >
                         <div className="gbsq-top">
                           {p.gb} GB <span className="gbsq-plus">+ {p.ekstra} GB</span>
                         </div>
@@ -287,7 +303,7 @@ export default function Calculator() {
                         )}
                         <div className="gbsq-sub">Samme pris</div>
                         <div className="gbsq-sub">GB beholdes fast</div>
-                      </div>
+                      </button>
                     );
                   })}
                 </div>
