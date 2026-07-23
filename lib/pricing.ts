@@ -12,20 +12,28 @@ export type SubType = "enkelt" | "familie";
 // One radio group, three states. A plan only offers the tiers it lists in `priser`.
 export type DiscountId = "full" | "p20" | "p35";
 
-export const DISCOUNT_LABEL: Record<DiscountId, string> = {
-  full: "Full pris",
-  p20: "−20 %",
-  p35: "−35 %",
-};
+// Customer-facing codewords. Percentages must never appear in the UI. The p20
+// label is dynamic: it reads "Fast Ung" when the line is sold under the "under 30"
+// (U30) campaign, otherwise "Permanent 20".
+export function discountLabel(disc: DiscountId, u30: boolean): string {
+  switch (disc) {
+    case "full":
+      return "Full pris";
+    case "p20":
+      return u30 ? "Fast Ung" : "Permanent 20";
+    case "p35":
+      return "Sommerkampanje";
+  }
+}
 
 export interface Plan {
   id: string;
   navn: string;
   /** GB amount, or null for Ubegrenset. */
   gb: number | null;
-  /** Bonus GB the rep can grant (0 = none, hides the extra-GB toggle). */
+  /** Bonus GB granted by the running "Ekstra GB" campaign (0 = none). */
   ekstra: number;
-  /** Whether "Første måned gratis" applies (Enkelt data plans only). */
+  /** Whether "Porteringsrabatt" applies (Enkelt data plans only). */
   fmf?: boolean;
   /** Unlimited plan flag (informational). */
   ub?: boolean;
@@ -38,6 +46,7 @@ export interface Plan {
 }
 
 export const ENKELT: Plan[] = [
+  { id: "u13", navn: "1 GB (U13)", gb: 1, ekstra: 0, fmf: true, single: true, priser: { full: 99 } },
   { id: "e1", navn: "1 GB", gb: 1, ekstra: 2, fmf: true, priser: { full: 249, p20: 199, p35: 162 } },
   { id: "e5", navn: "5 GB", gb: 5, ekstra: 3, fmf: true, priser: { full: 299, p20: 239, p35: 194 } },
   { id: "e10", navn: "10 GB", gb: 10, ekstra: 4, fmf: true, priser: { full: 349, p20: 279, p35: 227 } },
@@ -45,7 +54,6 @@ export const ENKELT: Plan[] = [
   { id: "e30", navn: "30 GB", gb: 30, ekstra: 10, fmf: true, priser: { full: 449, p20: 359, p35: 292 } },
   { id: "ubn", navn: "UB Normal", gb: null, ekstra: 0, fmf: false, ub: true, priser: { full: 529, p20: 423, p35: 344 } },
   { id: "ubm", navn: "UB Maksimal", gb: null, ekstra: 0, fmf: false, ub: true, priser: { full: 629, p20: 503, p35: 409 } },
-  { id: "u13", navn: "1 GB (U13)", gb: 1, ekstra: 0, fmf: true, single: true, priser: { full: 99 } },
 ];
 
 export const FAMILIE: Plan[] = [
@@ -95,13 +103,29 @@ export function planPrice(plan: Plan, disc: DiscountId): number {
   return plan.priser[effectiveDiscount(plan, disc)] as number;
 }
 
-export function vasTotal(vasIds: string[]): number {
-  return VAS.reduce((sum, v) => sum + (vasIds.includes(v.id) ? v.pris : 0), 0);
+// Listed Familie prices are the 2-person base. Each person beyond 2 adds a flat
+// surcharge; "Permanent 20" (p20) discounts the whole family total, which is the
+// same as discounting the surcharge by 20% (210 × 0.8 = 168, an exact integer).
+export const EXTRA_PERSON_PRICE = 210; // kr/mnd per person beyond 2 — confirmed
+
+/** Full discounted family total for `persons` people (2-person base + surcharge). */
+export function familiePrice(plan: Plan, disc: DiscountId, persons: number): number {
+  const eff = effectiveDiscount(plan, disc);
+  const base = plan.priser[eff] as number;
+  const extra = Math.max(0, persons - 2);
+  return eff === "p20"
+    ? base + Math.round(extra * EXTRA_PERSON_PRICE * 0.8)
+    : base + extra * EXTRA_PERSON_PRICE;
 }
 
-/** Monthly total for one configured line: discounted plan + selected add-ons. */
-export function lineMonthly(plan: Plan, disc: DiscountId, vasIds: string[]): number {
-  return planPrice(plan, disc) + vasTotal(vasIds);
+/** Sum of add-ons by quantity. Datasim/Tvillingsim/Ringepakke may be added more than once. */
+export function vasTotal(qty: Record<string, number>): number {
+  return VAS.reduce((sum, v) => sum + v.pris * (qty[v.id] ?? 0), 0);
+}
+
+/** Monthly total for one configured line: discounted plan + selected add-ons (by quantity). */
+export function lineMonthly(plan: Plan, disc: DiscountId, qty: Record<string, number>): number {
+  return planPrice(plan, disc) + vasTotal(qty);
 }
 
 export function formatKr(value: number): string {
@@ -147,7 +171,6 @@ export interface OrderLine {
   disc: DiscountId;
   discLbl: string;
   perPers: number | null;
-  ekstraGb: number;
   vasNames: string[];
   /** Discounted plan price only (add-ons free the first month). */
   price: number;

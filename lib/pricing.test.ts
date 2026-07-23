@@ -1,7 +1,9 @@
 import { describe, expect, it } from "vitest";
 import {
+  discountLabel,
   effectiveDiscount,
   ENKELT,
+  familiePrice,
   FAMILIE,
   formatKr,
   getPlan,
@@ -21,8 +23,8 @@ const fam = (id: string) => getPlan("familie", id);
 describe("Enkelt plans (match the reference build)", () => {
   it("has the eight Enkelt plans at the right full prices", () => {
     expect(ENKELT.map((p) => [p.id, p.priser.full])).toEqual([
-      ["e1", 249], ["e5", 299], ["e10", 349], ["e18", 399],
-      ["e30", 449], ["ubn", 529], ["ubm", 629], ["u13", 99],
+      ["u13", 99], ["e1", 249], ["e5", 299], ["e10", 349],
+      ["e18", 399], ["e30", 449], ["ubn", 529], ["ubm", 629],
     ]);
   });
 
@@ -73,13 +75,17 @@ describe("VAS add-ons", () => {
       ["dt", 69], ["tvil", 79], ["data", 79], ["ring", 99],
     ]);
   });
-  it("sums only selected add-ons; unknown ids contribute 0", () => {
-    expect(vasTotal(["dt", "ring"])).toBe(168);
-    expect(vasTotal([])).toBe(0);
-    expect(vasTotal(["nope"])).toBe(0);
+  it("sums add-ons by quantity; unknown ids contribute 0", () => {
+    expect(vasTotal({ dt: 1, ring: 1 })).toBe(168);
+    expect(vasTotal({})).toBe(0);
+    expect(vasTotal({ nope: 3 })).toBe(0);
+  });
+  it("multiplies repeatable add-ons by their count", () => {
+    expect(vasTotal({ data: 2 })).toBe(158); // 79 * 2
+    expect(vasTotal({ tvil: 3, ring: 1 })).toBe(79 * 3 + 99);
   });
   it("lineMonthly adds non-discounted add-ons on top of the discounted plan", () => {
-    expect(lineMonthly(plan("e10"), "p20", ["dt"])).toBe(279 + 69);
+    expect(lineMonthly(plan("e10"), "p20", { dt: 1 })).toBe(279 + 69);
   });
 });
 
@@ -99,7 +105,7 @@ describe("first-invoice timing (30-day convention)", () => {
 
 describe("orderChart", () => {
   const mk = (price: number, fmf = false, vas = 0): OrderLine => ({
-    navn: "x", disc: "full", discLbl: "Full pris", perPers: null, ekstraGb: 0,
+    navn: "x", disc: "full", discLbl: "Full pris", perPers: null,
     vasNames: [], price, fmf, monthly: price + vas,
   });
 
@@ -133,6 +139,45 @@ describe("orderChart", () => {
     const c = orderChart([], "2026-06-20");
     expect(c.totMonthly).toBe(0);
     expect(c.bars).toEqual([0, 0, 0]);
+  });
+});
+
+describe("discountLabel (codewords, never percentages)", () => {
+  it("maps p20 dynamically on the U30 campaign", () => {
+    expect(discountLabel("p20", false)).toBe("Permanent 20");
+    expect(discountLabel("p20", true)).toBe("Fast Ung");
+  });
+  it("p35 and full are static", () => {
+    expect(discountLabel("p35", true)).toBe("Sommerkampanje");
+    expect(discountLabel("full", false)).toBe("Full pris");
+  });
+  it("never contains a percent sign", () => {
+    for (const d of ["full", "p20", "p35"] as const) {
+      for (const u of [true, false]) {
+        expect(discountLabel(d, u)).not.toContain("%");
+      }
+    }
+  });
+});
+
+describe("familiePrice (2-person base + flat surcharge)", () => {
+  it("2 persons equals the listed tier price", () => {
+    expect(familiePrice(fam("f20"), "full", 2)).toBe(649);
+    expect(familiePrice(fam("f20"), "p20", 2)).toBe(519);
+  });
+  it("regression A: 20 GB, 4 persons, Permanent 20 = 855", () => {
+    expect(familiePrice(fam("f20"), "p20", 4)).toBe(855);
+  });
+  it("regression B: Ubegrenset, 4 persons -> full 1469, Permanent 20 -> 1175", () => {
+    expect(familiePrice(fam("fub"), "full", 4)).toBe(1469);
+    expect(familiePrice(fam("fub"), "p20", 4)).toBe(1175);
+  });
+  it("p20 total equals round(full total * 0.8) for every tier and person count", () => {
+    for (const p of FAMILIE) {
+      for (let n = 2; n <= 10; n++) {
+        expect(familiePrice(p, "p20", n)).toBe(Math.round(familiePrice(p, "full", n) * 0.8));
+      }
+    }
   });
 });
 
