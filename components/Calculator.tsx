@@ -140,8 +140,10 @@ export default function Calculator() {
       vas: {},
     });
   }
+  // Keep the person count when switching products within a tab; only a tab
+  // switch (changeType) resets it back to 2.
   function changePlan(id: string, via: "grid" | "camp" = "grid") {
-    patch({ prodId: id, via, fmf: false, persons: 2 });
+    patch({ prodId: id, via, fmf: false });
   }
   function toggleU30() {
     const u30 = !cfg.u30;
