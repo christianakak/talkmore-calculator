@@ -19,8 +19,9 @@ import {
   vasTotal,
 } from "@/lib/pricing";
 
-// Remaining-spots counts shown on the scarcity badges. Update here to change everywhere.
-const SCARCITY: Partial<Record<DiscountId, number>> = { p20: 6, p35: 3 };
+// Remaining-spots counts shown on the red "X igjen" scarcity badges. Editable.
+// p25 = Permanent 25 (Enkelt), p30 = Sommerkampanje (Enkelt), familieP20 = Familie Permanent 20.
+const SCARCITY_LEFT = { p25: 5, p30: 3, familieP20: 6 };
 
 // VAS display order (row-major over a 2-col grid): left column = Digital trygghet + Ringepakke,
 // right column = Datasim + Tvillingsim. Datasim/Tvillingsim/Ringepakke can be added more than once.
@@ -93,15 +94,19 @@ export default function Calculator() {
   const list = plansFor(cfg.type);
   const prod = getPlan(cfg.type, cfg.prodId);
   const familie = cfg.type === "familie";
-  const single = !!prod.single;
 
-  // The discount that actually applies to a given plan, coerced for u30/single/familie
-  // constraints. Used both for the selected line and for every product card (real-time).
+  // The discount tiers offered in the current context (Familie / Enkelt · U30 on/off).
+  // Single plans (U13) only ever get full price.
+  function availableDiscs(p: Plan): DiscountId[] {
+    if (p.single) return ["full"];
+    if (cfg.type === "familie") return ["full", "p20"];
+    return cfg.u30 ? ["full", "p20", "p30"] : ["full", "p15", "p25"];
+  }
+
+  // The discount that actually applies to a given plan: the selected tier if it is
+  // offered in this context, otherwise full. Used for the line and every card.
   function dispDiscFor(p: Plan): DiscountId {
-    let d = cfg.disc;
-    if (familie && d === "p35") d = "p20";
-    if (p.single && d !== "full") d = "full";
-    if (d === "p35" && !cfg.u30) d = "p20";
+    const d = availableDiscs(p).includes(cfg.disc) ? cfg.disc : "full";
     return effectiveDiscount(p, d);
   }
 
@@ -145,9 +150,10 @@ export default function Calculator() {
   function changePlan(id: string, via: "grid" | "camp" = "grid") {
     patch({ prodId: id, via, fmf: false });
   }
+  // Toggling U30 swaps the whole Enkelt discount set (Permanent 15/25 <-> Fast Ung/
+  // Sommerkampanje), so reset the selection to full to avoid a stale tier.
   function toggleU30() {
-    const u30 = !cfg.u30;
-    patch({ u30, disc: !u30 && cfg.disc === "p35" ? "p20" : cfg.disc });
+    patch({ u30: !cfg.u30, disc: "full" });
   }
 
   const vasQty = (id: string) => cfg.vas[id] ?? 0;
@@ -191,7 +197,8 @@ export default function Calculator() {
     return bits.join(" · ");
   }
 
-  const discKeys: DiscountId[] = ["full", "p20", "p35"];
+  // The discount buttons to show, in order, for the current context.
+  const discKeys = availableDiscs(prod);
 
   const hasOrder = order.length > 0;
   const chart = orderChart(order, port);
@@ -327,27 +334,31 @@ export default function Calculator() {
               </div>
             )}
             <div className="disc">
-              {discKeys
-                .filter((k) => !(familie && k === "p35"))
-                .map((k) => {
-                  const disabled = (single && k !== "full") || (k === "p35" && !cfg.u30);
-                  // p20 badge only in its "Permanent 20" state (U30 off); p35 badge always when live.
-                  const showScar =
-                    !disabled && !single && (k === "p35" || (k === "p20" && !cfg.u30));
-                  const n = SCARCITY[k];
-                  return (
-                    <button
-                      key={k}
-                      type="button"
-                      disabled={disabled}
-                      className={`${curDisc === k ? "on" : ""}${showScar ? " scarce" : ""}`}
-                      onClick={() => patch({ disc: k })}
-                    >
-                      {showScar && n !== undefined && <span className="scar">{n} igjen</span>}
-                      {discountLabel(k, cfg.u30)}
-                    </button>
-                  );
-                })}
+              {discKeys.map((k) => {
+                // Familie Permanent 20 keeps its badge; on Enkelt the badges sit on
+                // Permanent 25 and Sommerkampanje. Everything else has none.
+                const scarN = familie
+                  ? k === "p20"
+                    ? SCARCITY_LEFT.familieP20
+                    : undefined
+                  : k === "p25"
+                    ? SCARCITY_LEFT.p25
+                    : k === "p30"
+                      ? SCARCITY_LEFT.p30
+                      : undefined;
+                const showScar = scarN !== undefined;
+                return (
+                  <button
+                    key={k}
+                    type="button"
+                    className={`${curDisc === k ? "on" : ""}${showScar ? " scarce" : ""}`}
+                    onClick={() => patch({ disc: k })}
+                  >
+                    {showScar && <span className="scar">{scarN} igjen</span>}
+                    {discountLabel(k, cfg.u30)}
+                  </button>
+                );
+              })}
             </div>
             <div className="permanent">
               <div className="perm-title">Fast rabatt</div>

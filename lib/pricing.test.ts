@@ -28,19 +28,19 @@ describe("Enkelt plans (match the reference build)", () => {
     ]);
   });
 
-  it("each data plan exposes full / −20 % / −35 % tiers", () => {
-    expect(plan("e10").priser).toEqual({ full: 349, p20: 279, p35: 227 });
-    expect(plan("ubm").priser).toEqual({ full: 629, p20: 503, p35: 409 });
+  it("each data plan exposes full / p15 / p20 / p25 / p30 tiers (rounded %)", () => {
+    expect(plan("e10").priser).toEqual({ full: 349, p15: 297, p20: 279, p25: 262, p30: 244 });
+    expect(plan("ubm").priser).toEqual({ full: 629, p15: 535, p20: 503, p25: 472, p30: 440 });
   });
 
-  it("−20 % now applies to UB Maksimal", () => {
+  it("Fast Ung (p20 = 20% off) still applies to UB Maksimal", () => {
     expect(planPrice(plan("ubm"), "p20")).toBe(503);
   });
 
   it("U13 is a flat 99 with no discount tiers", () => {
     expect(plan("u13").priser).toEqual({ full: 99 });
-    expect(planPrice(plan("u13"), "p20")).toBe(99); // falls back to full
-    expect(planPrice(plan("u13"), "p35")).toBe(99);
+    expect(planPrice(plan("u13"), "p25")).toBe(99); // falls back to full
+    expect(planPrice(plan("u13"), "p30")).toBe(99);
   });
 });
 
@@ -52,20 +52,22 @@ describe("Familie (fixed tiers, per person, full / −20 % only)", () => {
     ]);
   });
 
-  it("offers −20 % but not −35 %", () => {
+  it("offers Permanent 20 (p20) but none of the Enkelt-only tiers", () => {
     expect(planPrice(fam("f20"), "p20")).toBe(519);
-    expect(effectiveDiscount(fam("f20"), "p35")).toBe("full"); // no p35 tier -> full
-    expect(planPrice(fam("f20"), "p35")).toBe(649);
+    expect(effectiveDiscount(fam("f20"), "p30")).toBe("full"); // no p30 tier -> full
+    expect(planPrice(fam("f20"), "p30")).toBe(649);
+    expect(effectiveDiscount(fam("f20"), "p15")).toBe("full");
   });
 });
 
 describe("effectiveDiscount", () => {
   it("keeps a tier the plan offers", () => {
-    expect(effectiveDiscount(plan("e10"), "p35")).toBe("p35");
+    expect(effectiveDiscount(plan("e10"), "p30")).toBe("p30");
+    expect(effectiveDiscount(plan("e10"), "p15")).toBe("p15");
   });
   it("falls back to full when the tier is missing", () => {
-    expect(effectiveDiscount(plan("u13"), "p35")).toBe("full");
-    expect(effectiveDiscount(fam("f5"), "p35")).toBe("full");
+    expect(effectiveDiscount(plan("u13"), "p30")).toBe("full");
+    expect(effectiveDiscount(fam("f5"), "p30")).toBe("full");
   });
 });
 
@@ -147,12 +149,14 @@ describe("discountLabel (codewords, never percentages)", () => {
     expect(discountLabel("p20", false)).toBe("Permanent 20");
     expect(discountLabel("p20", true)).toBe("Fast Ung");
   });
-  it("p35 and full are static", () => {
-    expect(discountLabel("p35", true)).toBe("Sommerkampanje");
+  it("permanent and campaign tiers are static", () => {
+    expect(discountLabel("p15", false)).toBe("Permanent 15");
+    expect(discountLabel("p25", false)).toBe("Permanent 25");
+    expect(discountLabel("p30", true)).toBe("Sommerkampanje");
     expect(discountLabel("full", false)).toBe("Full pris");
   });
   it("never contains a percent sign", () => {
-    for (const d of ["full", "p20", "p35"] as const) {
+    for (const d of ["full", "p15", "p20", "p25", "p30"] as const) {
       for (const u of [true, false]) {
         expect(discountLabel(d, u)).not.toContain("%");
       }

@@ -9,8 +9,11 @@ export const PRICES_SOURCE = "talkmore.kundeportal.no";
 
 export type SubType = "enkelt" | "familie";
 
-// One radio group, three states. A plan only offers the tiers it lists in `priser`.
-export type DiscountId = "full" | "p20" | "p35";
+// A plan only offers the tiers it lists in `priser`.
+// Enkelt (non-U30): full, p15 (Permanent 15), p25 (Permanent 25).
+// Enkelt (U30):     full, p20 (Fast Ung), p30 (Sommerkampanje).
+// Familie:          full, p20 (Permanent 20).
+export type DiscountId = "full" | "p15" | "p20" | "p25" | "p30";
 
 // Customer-facing codewords. Percentages must never appear in the UI. The p20
 // label is dynamic: it reads "Fast Ung" when the line is sold under the "under 30"
@@ -19,9 +22,13 @@ export function discountLabel(disc: DiscountId, u30: boolean): string {
   switch (disc) {
     case "full":
       return "Full pris";
+    case "p15":
+      return "Permanent 15";
     case "p20":
       return u30 ? "Fast Ung" : "Permanent 20";
-    case "p35":
+    case "p25":
+      return "Permanent 25";
+    case "p30":
       return "Sommerkampanje";
   }
 }
@@ -45,15 +52,17 @@ export interface Plan {
   priser: Partial<Record<DiscountId, number>> & { full: number };
 }
 
+// Enkelt tiers derived as rounded percentages of the full price:
+// p15 = 15% off, p20 (Fast Ung) = 20% off, p25 = 25% off, p30 (Sommerkampanje) = 30% off.
 export const ENKELT: Plan[] = [
   { id: "u13", navn: "1 GB (U13)", gb: 1, ekstra: 0, fmf: true, single: true, priser: { full: 99 } },
-  { id: "e1", navn: "1 GB", gb: 1, ekstra: 2, fmf: true, priser: { full: 249, p20: 199, p35: 162 } },
-  { id: "e5", navn: "5 GB", gb: 5, ekstra: 3, fmf: true, priser: { full: 299, p20: 239, p35: 194 } },
-  { id: "e10", navn: "10 GB", gb: 10, ekstra: 4, fmf: true, priser: { full: 349, p20: 279, p35: 227 } },
-  { id: "e18", navn: "18 GB", gb: 18, ekstra: 5, fmf: true, priser: { full: 399, p20: 319, p35: 259 } },
-  { id: "e30", navn: "30 GB", gb: 30, ekstra: 10, fmf: true, priser: { full: 449, p20: 359, p35: 292 } },
-  { id: "ubn", navn: "UB Normal", gb: null, ekstra: 0, fmf: false, ub: true, priser: { full: 529, p20: 423, p35: 344 } },
-  { id: "ubm", navn: "UB Maksimal", gb: null, ekstra: 0, fmf: false, ub: true, priser: { full: 629, p20: 503, p35: 409 } },
+  { id: "e1", navn: "1 GB", gb: 1, ekstra: 2, fmf: true, priser: { full: 249, p15: 212, p20: 199, p25: 187, p30: 174 } },
+  { id: "e5", navn: "5 GB", gb: 5, ekstra: 3, fmf: true, priser: { full: 299, p15: 254, p20: 239, p25: 224, p30: 209 } },
+  { id: "e10", navn: "10 GB", gb: 10, ekstra: 4, fmf: true, priser: { full: 349, p15: 297, p20: 279, p25: 262, p30: 244 } },
+  { id: "e18", navn: "18 GB", gb: 18, ekstra: 5, fmf: true, priser: { full: 399, p15: 339, p20: 319, p25: 299, p30: 279 } },
+  { id: "e30", navn: "30 GB", gb: 30, ekstra: 10, fmf: true, priser: { full: 449, p15: 382, p20: 359, p25: 337, p30: 314 } },
+  { id: "ubn", navn: "UB Normal", gb: null, ekstra: 0, fmf: false, ub: true, priser: { full: 529, p15: 450, p20: 423, p25: 397, p30: 370 } },
+  { id: "ubm", navn: "UB Maksimal", gb: null, ekstra: 0, fmf: false, ub: true, priser: { full: 629, p15: 535, p20: 503, p25: 472, p30: 440 } },
 ];
 
 export const FAMILIE: Plan[] = [
