@@ -490,12 +490,14 @@ input[type="date"]:focus {
 /* rabatt buttons — labels only, scarcity badges + urgency border */
 .disc {
   display: flex;
-  gap: 9px;
+  flex-wrap: wrap;
+  /* row-gap clears the -9px scarcity badge when U30 wraps the row to 5 buttons */
+  gap: 16px 9px;
   margin-top: 2px;
 }
 .disc button {
   position: relative;
-  flex: 1;
+  flex: 1 1 28%;
   min-width: 0;
   border: 1px solid var(--glass-border);
   background: var(--glass);

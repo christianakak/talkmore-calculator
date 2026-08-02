@@ -1,10 +1,12 @@
 // Single source of truth for the Talkmore field-sales calculator (v3).
-// Prices, discount tiers and the Familie model mirror the approved reference
-// build (see docs/official-pricing.md). Numbers are stored explicitly per tier
-// so they match the reference exactly — never derived from a percentage here.
+// Full (list) prices and the Familie model mirror the approved reference build
+// (see docs/official-pricing.md). Discounted tiers are the full price minus a
+// fixed percentage, rounded to the nearest krone:
+//   Permanent 15 = −15 %, Fast Ung / Permanent 20 = −20 %,
+//   Permanent 25 = −25 %, Sommerkampanje = −30 %.
 
 // When the prices below were last checked against the official model.
-export const PRICES_VERIFIED = "26.06.2026";
+export const PRICES_VERIFIED = "02.08.2026";
 export const PRICES_SOURCE = "talkmore.kundeportal.no";
 
 export type SubType = "enkelt" | "familie";

@@ -100,7 +100,11 @@ export default function Calculator() {
   function availableDiscs(p: Plan): DiscountId[] {
     if (p.single) return ["full"];
     if (cfg.type === "familie") return ["full", "p20"];
-    return cfg.u30 ? ["full", "p20", "p30"] : ["full", "p15", "p25"];
+    // U30 keeps the permanent tiers visible AND adds Fast Ung + Sommerkampanje,
+    // so reps can show the customer the extra "under 30" options as leverage.
+    return cfg.u30
+      ? ["full", "p15", "p25", "p20", "p30"]
+      : ["full", "p15", "p25"];
   }
 
   // The discount that actually applies to a given plan: the selected tier if it is
@@ -153,7 +157,9 @@ export default function Calculator() {
   // Toggling U30 swaps the whole Enkelt discount set (Permanent 15/25 <-> Fast Ung/
   // Sommerkampanje), so reset the selection to full to avoid a stale tier.
   function toggleU30() {
-    patch({ u30: !cfg.u30, disc: "full" });
+    // Keep the current selection; dispDiscFor coerces it if it's not valid in the
+    // new state, so a permanent tier stays picked when U30 is switched on.
+    patch({ u30: !cfg.u30 });
   }
 
   const vasQty = (id: string) => cfg.vas[id] ?? 0;
